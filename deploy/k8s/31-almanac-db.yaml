@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: almanac-db
+  namespace: ecosystem
+spec:
+  serviceName: almanac-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: almanac-db
+  template:
+    metadata:
+      labels:
+        app: almanac-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: almanac
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "dev", "-d", "almanac"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: almanac-db
+  namespace: ecosystem
+spec:
+  clusterIP: None
+  selector:
+    app: almanac-db
+  ports:
+    - port: 5432
+      targetPort: postgres

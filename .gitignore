@@ -1,0 +1,8 @@
+DOMAIN.md
+LEARNING.md
+.claude
+
+.venv/
+__pycache__/
+
+deploy/k8s/10-credentials.yaml

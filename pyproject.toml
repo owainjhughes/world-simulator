@@ -1,0 +1,15 @@
+[project]
+name = "ecosystem"
+version = "0.1.0"
+description = "Distributed ecosystem simulation"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["services/*", "libs/*"]
+
+[dependency-groups]
+dev = ["aio-pika>=9.5"]
