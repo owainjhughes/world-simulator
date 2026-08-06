@@ -4,5 +4,7 @@ LEARNING.md
 
 .venv/
 __pycache__/
+.pytest_cache/
 
 deploy/k8s/10-credentials.yaml
+READMESTYLE.md

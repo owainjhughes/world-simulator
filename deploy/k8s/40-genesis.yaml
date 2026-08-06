@@ -15,8 +15,10 @@ spec:
     spec:
       containers:
         - name: genesis
-          image: ecosystem/genesis:dev
+          image: arathia:dev
           imagePullPolicy: IfNotPresent
+          command:
+            ["uvicorn", "app.genesis.main:app", "--host", "0.0.0.0", "--port", "8000"]
           ports:
             - name: http
               containerPort: 8000

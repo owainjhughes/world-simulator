@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clock
+  namespace: ecosystem
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: clock
+  template:
+    metadata:
+      labels:
+        app: clock
+    spec:
+      containers:
+        - name: clock
+          image: arathia:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.clock.main"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: clock-database-url
+            - name: AMQP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: amqp-url
+            - name: GENESIS_URL
+              value: http://genesis:8000
+            - name: TICK_SECONDS
+              value: "2"
