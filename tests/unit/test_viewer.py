@@ -1,3 +1,4 @@
+import asyncio
 import io
 import sys
 
@@ -5,6 +6,8 @@ import app.viewer.main as viewer
 
 
 def build_world(width=6, height=4):
+    viewer.log.clear()
+    viewer.screen["frame"] = None
     viewer.now = {"day": 0, "hour": 0, "season": "winter"}
     viewer.world["id"] = "w1"
     viewer.world["grid"] = [["#00AFAF"] * width for _ in range(height)]
@@ -71,3 +74,105 @@ def test_events_from_other_worlds_are_dropped():
     viewer.apply_event("clock.temperature.changed.wyldvale", temperature_payload("w2"))
     assert viewer.world["regions"]["wyldvale"]["celsius"] == 12.5
     assert viewer.now == {"day": 0, "hour": 0, "season": "winter"}
+
+
+def weather_payload(world_id, condition="rain"):
+    return {"world_id": world_id, "region_slug": "wyldvale", "condition": condition}
+
+
+def test_weather_starting_appends_to_the_log():
+    build_world()
+    viewer.apply_event("clock.weather.rain.started.wyldvale", weather_payload("w1"))
+    assert list(viewer.log) == ["day 0 00:00  rain started in Wyldvale"]
+
+
+def test_weather_stopping_appends_to_the_log():
+    build_world()
+    viewer.apply_event("clock.weather.rain.stopped.wyldvale", weather_payload("w1"))
+    assert list(viewer.log) == ["day 0 00:00  rain stopped in Wyldvale"]
+
+
+def test_season_changes_append_to_the_log():
+    build_world()
+    viewer.apply_event("clock.season.changed", {"world_id": "w1", "season": "spring"})
+    assert list(viewer.log) == ["day 0 00:00  season changed to spring"]
+
+
+def test_temperature_changes_stay_out_of_the_log():
+    build_world()
+    viewer.apply_event("clock.temperature.changed.wyldvale", temperature_payload("w1"))
+    assert not viewer.log
+
+
+def test_the_log_keeps_only_the_last_ten_entries():
+    build_world()
+    for _ in range(12):
+        viewer.apply_event("clock.weather.rain.started.wyldvale", weather_payload("w1"))
+    assert len(viewer.log) == 10
+
+
+def test_the_legend_lays_continents_out_in_columns():
+    build_world()
+    viewer.world["order"] = ["wyldvale", "chillcap"]
+    viewer.world["regions"]["chillcap"] = {
+        "name": "Chillcap",
+        "continent": "Northsaw",
+        "latitude": 2.0,
+        "colour": "#1D46B4",
+        "celsius": None,
+        "weather": set(),
+    }
+    lines = viewer.legend_lines()
+    assert any("Chillcap" in line and "Wyldvale" in line for line in lines)
+
+
+def test_the_log_renders_beside_the_legend_below_the_map():
+    build_world(width=6, height=4)
+    viewer.apply_event("clock.weather.rain.started.wyldvale", weather_payload("w1"))
+    lines = render_to_string().split("\n")
+    map_rows = [i for i, line in enumerate(lines) if line.count("48;2;") == 6]
+    title_row = next(i for i, line in enumerate(lines) if "World log" in line)
+    entry_row = next(i for i, line in enumerate(lines) if "rain started in Wyldvale" in line)
+    assert len(map_rows) == 4
+    assert max(map_rows) < title_row
+    assert "Kuerigo" in lines[title_row]
+    assert "Wyldvale" in lines[entry_row]
+
+
+def test_identical_frames_are_not_rewritten():
+    build_world()
+    first = render_to_string()
+    second = render_to_string()
+    assert first
+    assert second == ""
+
+
+def test_frames_are_wrapped_in_synchronized_update_escapes():
+    build_world()
+    body = render_to_string()
+    assert body.startswith("\x1b[?2026h")
+    assert body.endswith("\x1b[?2026l")
+
+
+def test_the_quit_key_shows_beside_the_log_title():
+    build_world()
+    lines = render_to_string().split("\n")
+    title = next(line for line in lines if "World log" in line)
+    assert "[q] menu" in title
+    assert "[q] menu" not in lines[0]
+
+
+def test_watching_keys_ends_on_q(monkeypatch):
+    keys = iter(["x", "q"])
+    monkeypatch.setattr(viewer, "read_key", lambda: next(keys))
+    asyncio.run(viewer.watch_keys())
+
+
+def test_map_tiles_paint_two_characters_wide():
+    build_world(width=6, height=4)
+    viewer.world["order"] = []
+    viewer.world["regions"] = {}
+    body = render_to_string()
+    drawn = [line for line in body.split("\n") if "48;2;" in line]
+    assert drawn
+    assert all("m  \x1b" in line for line in drawn)
