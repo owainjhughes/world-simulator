@@ -8,8 +8,8 @@ import httpx
 
 from domain.atlas import CONTINENTS, OCEAN_COLOUR
 
-GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:8000")
-AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
+GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:18800")
+AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
 WORLD_ID = os.environ.get("WORLD_ID")
 REFRESH_SECONDS = 0.5
 RESET = "\x1b[0m"

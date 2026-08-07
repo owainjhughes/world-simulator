@@ -31,7 +31,7 @@ ensure-world:
 	uv run python scripts/ensure_world.py
 
 viewer:
-	uv run python -m app.viewer.main
+	uv run python -m app.viewer.menu
 
 test: unit e2e
 
@@ -41,7 +41,7 @@ unit:
 e2e:
 	uv run pytest tests/e2e -q
 
-# ---- Kubernetes on Kind ----
+# ---- Kind ----
 
 k8s-run k8s-logs k8s-world k8s-worlds k8s-viewer k8s-e2e: GENESIS_URL := http://localhost:18810
 k8s-run k8s-logs k8s-world k8s-worlds k8s-viewer k8s-e2e: AMQP_URL := amqp://dev:dev@localhost:18811/
@@ -80,7 +80,7 @@ k8s-worlds:
 	curl $(GENESIS_URL)/worlds
 
 k8s-viewer:
-	uv run python -m app.viewer.main
+	uv run python -m app.viewer.menu
 
 k8s-e2e:
 	uv run pytest tests/e2e -q

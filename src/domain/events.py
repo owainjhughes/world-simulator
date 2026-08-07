@@ -47,6 +47,14 @@ class WorldCreated(Event):
         return "genesis.world.created"
 
 
+class WorldDeleted(Event):
+    event_type: Literal["WorldDeleted"] = "WorldDeleted"
+
+    @property
+    def routing_key(self) -> str:
+        return "genesis.world.deleted"
+
+
 class RegionCreated(Event):
     event_type: Literal["RegionCreated"] = "RegionCreated"
     region_id: UUID

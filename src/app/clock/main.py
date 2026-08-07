@@ -6,7 +6,7 @@ import socket
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 
 from domain.seasons import (
     DAYS_PER_SEASON,
@@ -28,6 +28,7 @@ from domain.events import (
     WeatherStarted,
     WeatherStopped,
     WorldCreated,
+    WorldDeleted,
 )
 from infra.messaging.consumer import EventConsumer
 from infra.messaging.publisher import EventPublisher
@@ -51,6 +52,15 @@ async def handle_event(routing_key: str, payload: dict) -> None:
                 )
             )
             log.info("registered world %s", event.world_id)
+        elif routing_key == "genesis.world.deleted":
+            event = WorldDeleted.model_validate(payload)
+            await session.execute(
+                delete(Region).where(Region.world_id == event.world_id)
+            )
+            await session.execute(
+                delete(WorldClock).where(WorldClock.world_id == event.world_id)
+            )
+            log.info("removed world %s", event.world_id)
         elif routing_key == "genesis.region.created":
             event = RegionCreated.model_validate(payload)
             await session.merge(
@@ -216,7 +226,7 @@ async def main() -> None:
     consumer = EventConsumer(
         AMQP_URL,
         "clock.genesis",
-        ["genesis.world.created", "genesis.region.created"],
+        ["genesis.world.created", "genesis.world.deleted", "genesis.region.created"],
     )
     await consumer.connect()
 

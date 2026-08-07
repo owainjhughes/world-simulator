@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
+from domain.events import WorldDeleted
 from domain.world import generate_world
 from infra.genesis.db import Session, engine
 from infra.genesis.models import Base, Region, Species, World
@@ -87,6 +88,21 @@ async def create_world(seed: int | None = None):
         "regions": len(regions),
         "species": sum(len(event.species) for event in species_events),
     }
+
+
+@app.delete("/worlds/{world_id}")
+async def delete_world(world_id: UUID):
+    async with Session() as session:
+        world = await session.get(World, world_id)
+        if world is None:
+            raise HTTPException(status_code=404, detail="world not found")
+        await session.execute(delete(Species).where(Species.world_id == world_id))
+        await session.execute(delete(Region).where(Region.world_id == world_id))
+        await session.delete(world)
+        await session.commit()
+
+    await publisher.publish(WorldDeleted(world_id=world_id))
+    return {"deleted": world_id}
 
 
 @app.get("/worlds")

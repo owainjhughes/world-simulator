@@ -8,8 +8,8 @@ import pytest
 
 from domain.atlas import REGIONS
 
-GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:8000")
-AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
+GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:18800")
+AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
 EVENT_TIMEOUT = 90
 
 REGION_COUNT = len(REGIONS)
@@ -111,6 +111,26 @@ async def test_the_clock_runs_exactly_one_world_across_all_regions():
 
     await asyncio.wait_for(watch(), timeout=EVENT_TIMEOUT)
     assert len(seen) == 1
+
+
+async def test_deleting_a_world_removes_it_and_announces_it():
+    listening = asyncio.Event()
+    listener = asyncio.create_task(collect("genesis.world.deleted", 8, listening))
+    await listening.wait()
+
+    async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=30) as client:
+        created = (await client.post("/worlds")).json()
+        world_id = created["world_id"]
+
+        deleted = (await client.delete(f"/worlds/{world_id}")).json()
+        assert deleted["deleted"] == world_id
+
+        worlds = (await client.get("/worlds")).json()
+        assert world_id not in {world["id"] for world in worlds}
+        assert (await client.get(f"/worlds/{world_id}/regions")).status_code == 404
+
+    events = await listener
+    assert world_id in {payload["world_id"] for _, payload in events}
 
 
 async def test_region_routing_keys_deliver_only_that_region():

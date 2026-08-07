@@ -187,11 +187,7 @@ make k8s-world
 kubectl scale deployment/clock -n ecosystem --replicas=2
 ```
 
-`make k8s-worlds` lists every world with its id, and the viewer watches a specific one with:
-
-```sh
-WORLD_ID=<uuid> make k8s-viewer
-```
+`make k8s-viewer` opens the world menu against the cluster, where you can see which pod-run worlds are ticking, view one, or create and delete them.
 
 # Using the Services
 
@@ -209,13 +205,25 @@ The RabbitMQ dashboard logs in with `dev` / `dev`. It is worth opening — you c
 
 ## 👁 Watching the world
 
-The viewer draws the map and updates it live as events arrive. It reads the world's shape from Genesis over HTTP, then subscribes to everything the Clock publishes.
-
 ```sh
 make viewer
 ```
 
-By default it watches the most recently created world. With more than one world running, pick one explicitly with `WORLD_ID=<uuid> make viewer` — events from every other world are ignored.
+That opens a small menu listing every world. Worlds a clock pod is actively running show their current day and season; worlds no pod has claimed show as idle. From here you can view a world, create a new one, or delete one:
+
+```
+  Arathia worlds (1 running)
+  1. bb20562b  seed 1542680042  idle
+  2. efd5d4eb  seed  961835526  day   2 17:00 winter
+
+  [v]iew N   [c]reate   [d]elete N   [r]efresh   [q]uit
+```
+
+The menu learns which worlds are running by listening to the event stream for a few seconds — there is no "running worlds" table anywhere, because the lease that says who runs a world lives in the Clock's own database, and services never read each other's databases. The events themselves are the shared truth.
+
+Deleting a world works the same way in reverse: Genesis removes it and announces `WorldDeleted`, the Clock hears that and drops its copy, and whichever pod was running the world exits its lease and claims another world if one is free.
+
+Picking `v` opens the map viewer for that world. It reads the world's shape from Genesis over HTTP, then subscribes to everything the Clock publishes — events from every other world are ignored. Quit it with Ctrl+C to fall back to the menu.
 
 Each region is drawn in its own colour, with the sea in between. The key is grouped by continent and runs north to south, with each island group listed among the neighbours it sits nearest:
 
@@ -253,6 +261,7 @@ The viewer holds no state of its own and never talks to a database. It is just a
 | ---------------------- | ------ | ------------------------------------------------------------ |
 | `/worlds`              | POST   | Generate a new world. Optional `?seed=` for a repeatable one |
 | `/worlds`              | GET    | List every world that has been generated                     |
+| `/worlds/{id}`         | DELETE | Delete a world and announce it, so the Clock drops it too    |
 | `/worlds/{id}/regions` | GET    | The regions of a world, with climate and tiles               |
 | `/worlds/{id}/species` | GET    | Every species in a world, with its full trait sheet          |
 | `/health`              | GET    | Health check, used by the Kubernetes probes                  |
