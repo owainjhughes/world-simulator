@@ -6,67 +6,86 @@ import sys
 import aio_pika
 import httpx
 
+from domain.atlas import CONTINENTS, OCEAN_COLOUR
+
 GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:8000")
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
 REFRESH_SECONDS = 0.5
-
-PALETTE = [27, 250, 244, 34, 54, 127, 41, 220, 22, 37]
 RESET = "\x1b[0m"
 
-world = {"width": 0, "height": 0, "grid": [], "regions": {}, "order": []}
+world = {"grid": [], "regions": {}, "order": []}
 now = {"day": 0, "hour": 0, "season": "winter"}
 
 
-def paint(colour: int) -> str:
-    return f"\x1b[48;5;{colour}m \x1b[49m"
+def paint(colour: str) -> str:
+    red, green, blue = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
+    return f"\x1b[48;2;{red};{green};{blue}m \x1b[49m"
 
 
 async def load_world() -> None:
     async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=10) as client:
         worlds = (await client.get("/worlds")).json()
         if not worlds:
-            sys.exit("no world yet - create one with: curl -X POST %s/worlds" % GENESIS_URL)
+            sys.exit(f"no world yet - create one with: curl -X POST {GENESIS_URL}/worlds")
         latest = worlds[-1]
         regions = (await client.get(f"/worlds/{latest['id']}/regions")).json()
 
-    world["width"] = latest["width"]
-    world["height"] = latest["height"]
-    world["grid"] = [[0] * latest["width"] for _ in range(latest["height"])]
+    world["grid"] = [[OCEAN_COLOUR] * latest["width"] for _ in range(latest["height"])]
 
-    for index, region in enumerate(regions):
-        slug = region["slug"]
-        world["order"].append(slug)
-        world["regions"][slug] = {
+    for region in regions:
+        colour = region["colour"]
+        world["order"].append(region["slug"])
+        world["regions"][region["slug"]] = {
             "name": region["name"],
-            "colour": PALETTE[index % len(PALETTE)],
+            "continent": region["continent"],
+            "latitude": sum(y for _, y in region["tiles"]) / len(region["tiles"]),
+            "colour": colour,
             "celsius": None,
             "weather": set(),
         }
         for x, y in region["tiles"]:
-            world["grid"][y][x] = PALETTE[index % len(PALETTE)]
+            world["grid"][y][x] = colour
+
+
+def legend_lines() -> list[str]:
+    lines = []
+
+    for continent in CONTINENTS:
+        members = [
+            slug
+            for slug in world["order"]
+            if world["regions"][slug]["continent"] == continent
+        ]
+        if not members:
+            continue
+
+        members.sort(key=lambda slug: world["regions"][slug]["latitude"])
+        lines.append(f"  {continent}")
+        for slug in members:
+            region = world["regions"][slug]
+            celsius = (
+                "      -" if region["celsius"] is None else f"{region['celsius']:6.1f}C"
+            )
+            weather = " ".join(sorted(region["weather"]))
+            lines.append(
+                f"  {paint(region['colour'])}{RESET} {region['name']:<16}"
+                f"{celsius}  {weather}"
+            )
+        lines.append("")
+
+    return lines
 
 
 def render() -> None:
-    lines = [
-        f"  Arathia   day {now['day']}  {now['hour']:02d}:00  {now['season']}",
-        "",
-    ]
-
-    legend = []
-    for slug in world["order"]:
-        region = world["regions"][slug]
-        celsius = "     -" if region["celsius"] is None else f"{region['celsius']:6.1f}C"
-        weather = " ".join(sorted(region["weather"])) or ""
-        legend.append(
-            f"{paint(region['colour'])}{RESET} {region['name']:<16}{celsius}  {weather}"
-        )
+    lines = [f"  Arathia   day {now['day']}  {now['hour']:02d}:00  {now['season']}", ""]
+    legend = legend_lines()
 
     for y, row in enumerate(world["grid"]):
-        map_line = "  " + "".join(paint(colour) for colour in row)
         side = f"   {legend[y]}" if y < len(legend) else ""
-        lines.append(map_line + side)
+        lines.append("  " + "".join(paint(colour) for colour in row) + side)
 
-    sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(lines) + "\n")
+    body = "\x1b[K\n".join(lines)
+    sys.stdout.write("\x1b[?25l\x1b[H" + body + "\x1b[K\n\x1b[0J")
     sys.stdout.flush()
 
 
@@ -121,4 +140,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        sys.stdout.write(RESET + "\n")
+        sys.stdout.write(RESET + "\x1b[?25h\n")

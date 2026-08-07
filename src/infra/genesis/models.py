@@ -29,6 +29,8 @@ class Region(Base):
     world_id: Mapped[UUID] = mapped_column(ForeignKey("worlds.id"))
     name: Mapped[str]
     slug: Mapped[str]
+    continent: Mapped[str]
+    colour: Mapped[str]
     climate: Mapped[dict] = mapped_column(JSONB)
     tiles: Mapped[list] = mapped_column(JSONB)
 

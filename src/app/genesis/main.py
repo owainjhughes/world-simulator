@@ -53,6 +53,8 @@ async def create_world(seed: int | None = None):
                 world_id=world.world_id,
                 name=region.name,
                 slug=region.slug,
+                continent=region.continent,
+                colour=region.colour,
                 climate=region.climate.model_dump(),
                 tiles=region.tiles,
             )

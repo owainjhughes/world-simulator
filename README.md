@@ -17,30 +17,43 @@ flowchart LR
 
 Arathia is a distributed simulation of a living world, built to learn distributed computing properly rather than to ship a product.
 
-A world is generated once: a tile grid carved into ten named regions, each populated with its own invented species that have diets, temperature preferences, movement types and a food web. From then on the world runs on its own — time passes, seasons turn, temperatures rise and fall with the hour and the season, and weather comes and goes region by region.
+A world is generated once: three continents and two island groups carved into fourteen named regions, each populated with its own invented species that have diets, temperature preferences, movement types and a food web. From then on the world runs on its own — time passes, seasons turn, temperatures rise and fall with the hour and the season, and weather comes and goes region by region.
 
 Nothing in the system calls anything else directly. Each service announces what has happened as events on RabbitMQ, and any service that cares subscribes. Every service owns its own database and nobody reads anyone else's.
 
-Here is a world Genesis actually produced, drawn as one character per tile:
+Here is a world Genesis actually produced, one character per tile, `.` for open sea:
 
 ```
-AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCC
-AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCC
-DDAAAAAAAAAAAAAAAAEEEEBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCC
-DDDDDDDDDDDDDDAAEEEEEEEEEEBBBBBBBBBBBBCCCCCCCCCCCCCCCCCCCCCC
-DDDDDDDDDDDDDDDDEEEEEEEEEEEEEEBBBBBFFFFFCCCCCCCCCCCCCCCCCCCC
-DDDDDDDDDDDDDDDEEEEEEEEEEEEEEEEEFFFFFFFFFFFFCCCCCCCCCCCGGGGG
-DDDDDDDDDDDDHHHHEEEEEEEEEEEEEEEFFFFFFFFFFFFFFGGGGGGGGGGGGGGG
-HHHHHHHHHHHHHHHHHHHHHHHEEEIIIIIIIIIIFFFFFFFJJJGGGGGGGGGGGGGG
-HHHHHHHHHHHHHHHHHHHHHHHHIIIIIIIIIIIIIIIIJJJJJJJJJJGGGGGGGGGG
-HHHHHHHHHHHHHHHHHHHHHHHIIIIIIIIIIIIIIIIJJJJJJJJJJJJJJJJJJJJJ
+.................................................LLL............................
+........................JJJJJ...................LLLLL...........................
+.......................JJJJJJJ.................LLLLLLL..........................
+......................JJJJJJJJ.................LLLLLLL..........................
+.......................JJJJJJJ................LLLLLLL...........................
+......................JJJJJJJJJ..............LLLLLLLLL.......AAAAAA.............
+.......................JJJJJJJJJJJ........LLLLLLLLLLLL......AAAAAAAA............
+........................JJJJJJJJJKKKKKKKKKKLLLLLLLLLL........AAAAAAAA...........
+..........................JJJJJJKKKKKKKKKKKKLLLLLLL.........AAAAAAAA............
+...........................JJJKKKKKKKKKKKKKKKKKLLLL........AAABBBBBB............
+.............FFFF.............KKKKKKKKKKKKKK................BBBBBBBBB...........
+..........FFFFFFFFFFF..............KKKKKKK...................CBBBBBBB......N....
+.........FFFFFFFFFFFFFFF...................................CCCCCCCCCC....NNNNN..
+.........HHFFFFFFFGGGGGGGG................................CCCCCCCCC.........NNN.
+.........HHHHHFFGGGGGGGGGGG.........M......................CCCCCCCCC....NNN.NNN.
+........HHHHHHHHGGGGGGGGGGG.......MMMMM......................DDDDCCC............
+.......HHHHHHHHHHGGGGGGGGG........MMMMM.................DDDDDDDDDDDD............
+.......HHHHHHHHHHHIIIIII................................EEDDDDDDDDD.............
+.......HHHHHHHHIIIIIIIIIII................................EEEEEDDD..............
+...........HHIIIIIIIIIIIII...............................EEEEEEEE...............
+...........IIIIIIIIIIII..................................EEEEEEE................
 ```
 
-The region seeds are fixed, so the map is recognisable every time, but each run jitters how strongly each region pushes against its neighbours — so the borders move and no two worlds are identical.
+Roughly 28% of the map is land. The continent outlines and the position of every region are fixed, so the world is recognisable every time — but the coastline and the borders are generated with noise that shifts each run, so no two worlds are identical.
+
+Ocean is simply any tile no region owns, which makes water a real barrier: something that walks cannot cross it, something that swims can, and something that flies does not care.
 
 ## Features
 
-- Procedural world generation: ten regions on a 60x40 tile grid, with borders that shift between runs
+- Procedural world generation: fourteen regions across three continents and two island groups on an 80x50 grid, with coastlines and borders that shift between runs
 - Invented species per region, named from word banks, with randomised traits and wired-up predator/prey relationships
 - A world clock with day/night, four seasons, and temperature that follows both the hour and the time of year
 - Per-region weather, where snow rather than rain falls if the region is below freezing
@@ -81,8 +94,8 @@ uv run python -m app.viewer.main
 If you would rather just read the logs, `make logs` follows the clock:
 
 ```
-clock  | day 0 06:00 winter - 10 regions, 17 events
-clock  | day 0 07:00 winter - 10 regions, 13 events
+clock  | day 0 06:00 winter - 14 regions, 21 events
+clock  | day 0 07:00 winter - 14 regions, 17 events
 ```
 
 ## ☸ The interesting way: Kubernetes with Kind
@@ -181,22 +194,33 @@ The viewer draws the map and updates it live as events arrive. It reads the worl
 make viewer
 ```
 
-Each region is a block of colour, with its current temperature and weather listed beside it:
+Each region is drawn in its own colour, with the sea in between. The key is grouped by continent and runs north to south, with each island group listed among the neighbours it sits nearest:
 
 ```
-  Arathia   day 1  09:00  winter
+  Arathia   day 0  13:00  winter
 
-  ███████████░░░░░░░░▒▒▒▒▒▒▒▒▒    Denn Arctogh     -31.3C  sunshine wind
-  ███████████░░░░░░░░▒▒▒▒▒▒▒▒▒    Boring Tundra    -21.2C  snow wind
-  ███████████░░░░░░░▒▒▒▒▒▒▒▒▒▒    Korees            -8.2C  wind
-  ██████░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒    Wylenn             5.3C
-  ███░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Gloamwoods         1.2C  sunshine wind
-  ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Trynwyn            7.3C  sunshine wind
-  ░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Yoonhye Forest     5.9C  wind
-  ░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Ranatis           12.3C  wind
-  ░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Stragglefaun      22.5C  rain
-  ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒    Kagotsuma         10.4C  rain wind
+                        Northsaw
+                          Boring Tundra    -16.1C  sunshine
+                          Wailfirth         -0.3C  snow
+                          Chillcap         -30.4C
+
+   [the map, in           Kuerigo
+    colour, with            Korees            -4.6C  sunshine
+    ocean between           Wyldvale          10.3C  sunshine wind
+    the three               Doreidrassil      11.8C  sunshine wind
+    continents]             Trynwyn            8.7C
+                            Ranatis           18.5C
+
+                        Eastern Isles
+                          Yoonhye Forest    11.0C
+                          Denn Arctogh     -24.5C  wind
+                          Kagotsuma         20.5C  sunshine
+                          Wylenn             7.2C  wind
+                          Gloamwoods         5.8C  sunshine
+                          Stragglefaun      25.3C  sunshine
 ```
+
+That is a real frame. Note Wailfirth getting snow while everywhere else with weather gets none — it is the only region below freezing at that moment.
 
 The viewer holds no state of its own and never talks to a database. It is just another subscriber, which is what makes it a good demonstration of the whole design: you can start it, stop it, and start it again, and the simulation neither knows nor cares.
 
@@ -316,19 +340,11 @@ Clock does both. It declares its durable queue before anything else, so events p
 
 ## 📚 Stack
 
-- **Python 3.13+ with [uv](https://docs.astral.sh/uv/)** for a workspace monorepo.
-  - One lockfile at the root, one command (`uv sync --all-packages`) to set everything up.
-  - Services depend on the shared libraries directly, with nothing published to a registry.
-- **[FastAPI](https://fastapi.tiangolo.com/) and [Pydantic](https://docs.pydantic.dev/)** for the Genesis API and every event schema.
-  - Pydantic validates messages at the edge, so anything past that point is guaranteed well-formed.
-  - Free Swagger documentation is a nice bonus.
-- **[RabbitMQ](https://www.rabbitmq.com/)** as the message broker.
-  - Chosen over Kafka to start, because queue semantics — bindings, acknowledgements, dead-letter queues — are simpler to learn without a cluster to run.
-  - Topic exchanges give the wildcard routing that per-region subscriptions need.
-- **[PostgreSQL](https://www.postgresql.org/) with [SQLAlchemy 2.0 async](https://docs.sqlalchemy.org/) and asyncpg.**
-  - One database per service, never shared.
+- **Python 3.13+ with [uv](https://docs.astral.sh/uv/)**
+- **[FastAPI](https://fastapi.tiangolo.com/) and [Pydantic](https://docs.pydantic.dev/)**
+- **[RabbitMQ](https://www.rabbitmq.com/)**
+- **[PostgreSQL](https://www.postgresql.org/)**
 - **[Docker Compose](https://docs.docker.com/compose/) and [Kind](https://kind.sigs.k8s.io/).**
-  - Compose for quick iteration; Kind for the real thing, with StatefulSets, Secrets, probes and a genuine multi-node cluster.
 
 # Development
 

@@ -1,18 +1,58 @@
-from domain.world import HEIGHT, REGIONS, WIDTH, generate_world
+from domain.atlas import CONTINENTS, HEIGHT, MAP_ROWS, OCEAN, REGIONS, WIDTH
+from domain.world import generate_world
 
 
-def test_every_tile_belongs_to_exactly_one_region():
+def test_no_tile_belongs_to_two_regions():
     _, regions, _ = generate_world(seed=1)
     tiles = [tuple(tile) for region in regions for tile in region.tiles]
-    assert len(tiles) == WIDTH * HEIGHT
-    assert len(set(tiles)) == WIDTH * HEIGHT
+    assert len(tiles) == len(set(tiles))
+
+
+def test_the_world_has_both_land_and_sea():
+    _, regions, _ = generate_world(seed=1)
+    land = sum(len(region.tiles) for region in regions)
+    assert 0 < land < WIDTH * HEIGHT
+    assert land < WIDTH * HEIGHT * 0.6
 
 
 def test_all_named_regions_are_present_and_populated():
     _, regions, species_events = generate_world(seed=2)
-    assert [region.name for region in regions] == [name for name, _, _ in REGIONS]
+    assert [region.name for region in regions] == [name for _, name, _, _, _ in REGIONS]
     assert all(region.tiles for region in regions)
     assert all(event.species for event in species_events)
+
+
+def test_every_painted_tile_is_claimed_by_a_region():
+    _, regions, _ = generate_world(seed=1)
+    claimed = sum(len(region.tiles) for region in regions)
+    painted = sum(len(row) - row.count(OCEAN) for row in MAP_ROWS)
+    assert claimed == painted
+
+
+def test_islands_stay_small():
+    _, regions, _ = generate_world(seed=1)
+    by_name = {region.name: region.tiles for region in regions}
+    assert len(by_name["Kagotsuma"]) < len(by_name["Denn Arctogh"])
+    assert len(by_name["Doreidrassil"]) < len(by_name["Denn Arctogh"])
+
+
+def test_regions_carry_a_colour():
+    _, regions, _ = generate_world(seed=1)
+    for region in regions:
+        assert region.colour.startswith("#")
+        assert len(region.colour) == 7
+
+
+def test_every_region_belongs_to_a_named_continent():
+    _, regions, _ = generate_world(seed=1)
+    assert {region.continent for region in regions} == set(CONTINENTS)
+
+
+def test_islands_are_grouped_with_their_nearest_continent():
+    _, regions, _ = generate_world(seed=1)
+    continent_of = {region.name: region.continent for region in regions}
+    assert continent_of["Doreidrassil"] == continent_of["Trynwyn"]
+    assert continent_of["Kagotsuma"] == continent_of["Wylenn"]
 
 
 def test_the_same_seed_rebuilds_the_same_world():
@@ -21,10 +61,15 @@ def test_the_same_seed_rebuilds_the_same_world():
     assert [region.tiles for region in first] == [region.tiles for region in second]
 
 
-def test_different_seeds_move_the_borders():
+def test_the_map_is_the_same_whatever_the_seed():
     _, first, _ = generate_world(seed=1)
     _, second, _ = generate_world(seed=2)
-    assert [region.tiles for region in first] != [region.tiles for region in second]
+    assert [region.tiles for region in first] == [region.tiles for region in second]
+
+
+def test_the_map_is_a_clean_rectangle():
+    assert len(MAP_ROWS) == HEIGHT
+    assert {len(row) for row in MAP_ROWS} == {WIDTH}
 
 
 def test_species_names_are_unique_across_the_world():

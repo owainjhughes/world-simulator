@@ -1,7 +1,7 @@
-import math
 import random
 from uuid import UUID, uuid4
 
+from domain.atlas import HEIGHT, MAP_ROWS, OCEAN, REGIONS, WIDTH
 from domain.events import (
     Climate,
     RegionCreated,
@@ -11,36 +11,21 @@ from domain.events import (
 )
 from domain.wordbanks import EPITHETS, HABITATS, PLANTS, PREFIXES, SUFFIXES
 
-WIDTH = 60
-HEIGHT = 40
-
-REGIONS = [
-    ("Denn Arctogh", (10, 4), Climate(terrain="ice sheet", min_temperature=-35, max_temperature=-2, rainfall="low")),
-    ("Boring Tundra", (30, 5), Climate(terrain="tundra", min_temperature=-25, max_temperature=8, rainfall="low")),
-    ("Korees", (48, 10), Climate(terrain="mountain", min_temperature=-12, max_temperature=14, rainfall="moderate")),
-    ("Wylenn", (8, 17), Climate(terrain="forest", min_temperature=2, max_temperature=20, rainfall="moderate")),
-    ("Gloamwoods", (23, 19), Climate(terrain="dark forest", min_temperature=0, max_temperature=16, rainfall="high")),
-    ("Trynwyn", (38, 21), Climate(terrain="fungal forest", min_temperature=6, max_temperature=22, rainfall="high")),
-    ("Yoonhye Forest", (52, 25), Climate(terrain="temperate forest", min_temperature=4, max_temperature=26, rainfall="moderate")),
-    ("Ranatis", (14, 31), Climate(terrain="desert", min_temperature=8, max_temperature=46, rainfall="arid")),
-    ("Stragglefaun", (31, 34), Climate(terrain="jungle", min_temperature=20, max_temperature=38, rainfall="torrential")),
-    ("Kagotsuma", (48, 36), Climate(terrain="volcanic coast", min_temperature=8, max_temperature=30, rainfall="high")),
-]
-
 TRANSPORT_SPEEDS = {"walk": (1.0, 6.0), "swim": (2.0, 8.0), "fly": (5.0, 14.0)}
 
 
-def assign_tiles(rng: random.Random) -> dict[str, list[tuple[int, int]]]:
-    strengths = [rng.uniform(0.85, 1.15) for _ in REGIONS]
-    tiles: dict[str, list[tuple[int, int]]] = {name: [] for name, _, _ in REGIONS}
+def slug_for(name: str) -> str:
+    return name.lower().replace(" ", "-")
 
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            nearest = min(
-                range(len(REGIONS)),
-                key=lambda i: math.dist((x, y), REGIONS[i][1]) / strengths[i],
-            )
-            tiles[REGIONS[nearest][0]].append((x, y))
+
+def assign_regions() -> dict[str, list[tuple[int, int]]]:
+    name_of = {key: name for key, name, _, _, _ in REGIONS}
+    tiles: dict[str, list[tuple[int, int]]] = {name: [] for name in name_of.values()}
+
+    for y, row in enumerate(MAP_ROWS):
+        for x, key in enumerate(row):
+            if key != OCEAN:
+                tiles[name_of[key]].append((x, y))
 
     return tiles
 
@@ -57,7 +42,7 @@ def _make_name(rng: random.Random, taken: set[str]) -> str:
 
 def _make_transport(rng: random.Random, climate: Climate) -> str:
     weights = {"walk": 0.6, "swim": 0.15, "fly": 0.25}
-    if "coast" in climate.terrain:
+    if "coast" in climate.terrain or "estuary" in climate.terrain:
         weights = {"walk": 0.4, "swim": 0.4, "fly": 0.2}
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
@@ -114,20 +99,22 @@ def generate_world(
 ) -> tuple[WorldCreated, list[RegionCreated], list[SpeciesGenerated]]:
     rng = random.Random(seed)
     world_id = uuid4()
-    tiles = assign_tiles(rng)
+    tiles = assign_regions()
     taken: set[str] = set()
 
     regions = []
     species_events = []
 
-    for name, _, climate in REGIONS:
+    for _, name, continent, colour, climate in REGIONS:
         region_id = uuid4()
         regions.append(
             RegionCreated(
                 world_id=world_id,
                 region_id=region_id,
                 name=name,
-                slug=name.lower().replace(" ", "-"),
+                slug=slug_for(name),
+                continent=continent,
+                colour=colour,
                 climate=climate,
                 tiles=tiles[name],
             )

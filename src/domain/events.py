@@ -52,6 +52,8 @@ class RegionCreated(Event):
     region_id: UUID
     name: str
     slug: str
+    continent: str
+    colour: str
     climate: Climate
     tiles: list[tuple[int, int]]
 
