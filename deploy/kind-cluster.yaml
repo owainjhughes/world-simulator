@@ -5,13 +5,13 @@ nodes:
   - role: control-plane
     extraPortMappings:
       - containerPort: 30080
-        hostPort: 8080
+        hostPort: 18810
         protocol: TCP
       - containerPort: 30672
-        hostPort: 15673
+        hostPort: 18812
         protocol: TCP
       - containerPort: 30567
-        hostPort: 5673
+        hostPort: 18811
         protocol: TCP
   - role: worker
   - role: worker

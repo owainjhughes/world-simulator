@@ -82,12 +82,12 @@ async def test_creating_a_world_announces_it_on_the_broker():
     assert len(mine) == CREATION_EVENTS
 
 
-async def test_the_clock_picks_up_a_new_world_and_starts_running_it():
+async def test_the_clock_runs_exactly_one_world_across_all_regions():
     async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=30) as client:
-        created = (await client.post("/worlds")).json()
+        if not (await client.get("/worlds")).json():
+            await client.post("/worlds")
 
-    world_id = created["world_id"]
-    seen_regions: set[str] = set()
+    seen: dict[str, set[str]] = {}
 
     async def watch():
         connection = await aio_pika.connect_robust(AMQP_URL)
@@ -103,13 +103,14 @@ async def test_the_clock_picks_up_a_new_world_and_starts_running_it():
                 async for message in messages:
                     async with message.process():
                         payload = json.loads(message.body)
-                        if payload["world_id"] == world_id:
-                            seen_regions.add(payload["region_slug"])
-                        if len(seen_regions) == REGION_COUNT:
+                        seen.setdefault(payload["world_id"], set()).add(
+                            payload["region_slug"]
+                        )
+                        if len(seen[payload["world_id"]]) == REGION_COUNT:
                             return
 
     await asyncio.wait_for(watch(), timeout=EVENT_TIMEOUT)
-    assert len(seen_regions) == REGION_COUNT
+    assert len(seen) == 1
 
 
 async def test_region_routing_keys_deliver_only_that_region():

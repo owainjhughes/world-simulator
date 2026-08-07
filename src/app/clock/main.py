@@ -2,10 +2,11 @@ import asyncio
 import logging
 import os
 import random
+import socket
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-import httpx
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from domain.seasons import (
     DAYS_PER_SEASON,
@@ -32,8 +33,10 @@ from infra.messaging.consumer import EventConsumer
 from infra.messaging.publisher import EventPublisher
 
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
-GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:8000")
 TICK_SECONDS = float(os.environ.get("TICK_SECONDS", "2"))
+LEASE_SECONDS = 30
+CLAIM_RETRY_SECONDS = 5
+POD_NAME = socket.gethostname()
 
 log = logging.getLogger("clock")
 
@@ -64,135 +67,124 @@ async def handle_event(routing_key: str, payload: dict) -> None:
         await session.commit()
 
 
-async def bootstrap() -> None:
-    async with Session() as session:
-        if await session.scalar(select(WorldClock).limit(1)):
-            return
-
-    async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=5) as client:
-        worlds = (await client.get("/worlds")).json()
-        if not worlds:
-            log.info("genesis has no world yet, waiting for events")
-            return
-        world = worlds[-1]
-        regions = (await client.get(f"/worlds/{world['id']}/regions")).json()
-
-    async with Session() as session:
-        session.add(
-            WorldClock(
-                world_id=UUID(world["id"]), day=0, hour=0, season=season_for_day(0)
+async def claim_world() -> UUID | None:
+    now = datetime.now(UTC)
+    async with Session.begin() as session:
+        clock = await session.scalar(
+            select(WorldClock)
+            .where(
+                or_(
+                    WorldClock.claimed_by.is_(None),
+                    WorldClock.lease_expires_at < now,
+                )
             )
+            .limit(1)
+            .with_for_update(skip_locked=True)
         )
-        session.add_all(
-            Region(
-                id=UUID(region["id"]),
-                world_id=UUID(world["id"]),
-                name=region["name"],
-                slug=region["slug"],
-                climate=region["climate"],
-                weather=[],
-            )
-            for region in regions
-        )
-        await session.commit()
-
-    log.info(
-        "bootstrapped world %s with %d regions from genesis", world["id"], len(regions)
-    )
+        if clock is None:
+            return None
+        clock.claimed_by = POD_NAME
+        clock.lease_expires_at = now + timedelta(seconds=LEASE_SECONDS)
+        return clock.world_id
 
 
-async def tick(rng: random.Random) -> list[Event]:
+async def tick(rng: random.Random, world_id: UUID) -> list[Event]:
     events: list[Event] = []
 
     async with Session() as session:
-        clocks = (await session.scalars(select(WorldClock))).all()
+        clock = await session.scalar(
+            select(WorldClock)
+            .where(WorldClock.world_id == world_id, WorldClock.claimed_by == POD_NAME)
+            .with_for_update()
+        )
+        if clock is None:
+            raise SystemExit(f"lost lease on world {world_id}")
+        clock.lease_expires_at = datetime.now(UTC) + timedelta(seconds=LEASE_SECONDS)
 
-        for clock in clocks:
-            published_before = len(events)
-            clock.hour += 1
-            if clock.hour == HOURS_PER_DAY:
-                clock.hour = 0
-                clock.day += 1
+        clock.hour += 1
+        if clock.hour == HOURS_PER_DAY:
+            clock.hour = 0
+            clock.day += 1
 
-            if clock.hour == 6:
-                events.append(DayArrived(world_id=clock.world_id, day=clock.day))
-            elif clock.hour == 18:
-                events.append(NightArrived(world_id=clock.world_id, day=clock.day))
+        if clock.hour == 6:
+            events.append(DayArrived(world_id=clock.world_id, day=clock.day))
+        elif clock.hour == 18:
+            events.append(NightArrived(world_id=clock.world_id, day=clock.day))
 
-            if clock.hour == 0:
-                season = season_for_day(clock.day)
-                if season != clock.season:
-                    clock.season = season
-                    events.append(
-                        SeasonChanged(
-                            world_id=clock.world_id, season=season, day=clock.day
-                        )
-                    )
-                    log.info("season changed to %s on day %d", season, clock.day)
+        if clock.hour == 0:
+            season = season_for_day(clock.day)
+            if season != clock.season:
+                clock.season = season
                 events.append(
-                    SeasonProgressed(
-                        world_id=clock.world_id,
-                        season=season,
-                        day=clock.day,
-                        day_of_season=clock.day % DAYS_PER_SEASON,
+                    SeasonChanged(
+                        world_id=clock.world_id, season=season, day=clock.day
                     )
                 )
-
-            regions = (
-                await session.scalars(
-                    select(Region).where(Region.world_id == clock.world_id)
+                log.info("season changed to %s on day %d", season, clock.day)
+            events.append(
+                SeasonProgressed(
+                    world_id=clock.world_id,
+                    season=season,
+                    day=clock.day,
+                    day_of_season=clock.day % DAYS_PER_SEASON,
                 )
-            ).all()
+            )
 
-            for region in regions:
-                celsius = temperature(region.climate, clock.day, clock.hour, rng)
+        regions = (
+            await session.scalars(
+                select(Region).where(Region.world_id == clock.world_id)
+            )
+        ).all()
+
+        for region in regions:
+            celsius = temperature(region.climate, clock.day, clock.hour, rng)
+            events.append(
+                TemperatureChanged(
+                    world_id=clock.world_id,
+                    region_id=region.id,
+                    region_slug=region.slug,
+                    region_name=region.name,
+                    celsius=celsius,
+                    day=clock.day,
+                    hour=clock.hour,
+                    season=clock.season,
+                )
+            )
+
+            active, started, stopped = update_weather(
+                region.weather, region.climate, celsius, rng
+            )
+            if started or stopped:
+                region.weather = active
+            for condition in started:
                 events.append(
-                    TemperatureChanged(
+                    WeatherStarted(
                         world_id=clock.world_id,
                         region_id=region.id,
                         region_slug=region.slug,
                         region_name=region.name,
-                        celsius=celsius,
-                        day=clock.day,
-                        hour=clock.hour,
-                        season=clock.season,
+                        condition=condition,
+                    )
+                )
+            for condition in stopped:
+                events.append(
+                    WeatherStopped(
+                        world_id=clock.world_id,
+                        region_id=region.id,
+                        region_slug=region.slug,
+                        region_name=region.name,
+                        condition=condition,
                     )
                 )
 
-                active, started, stopped = update_weather(
-                    region.weather, region.climate, celsius, rng
-                )
-                if started or stopped:
-                    region.weather = active
-                for condition in started:
-                    events.append(
-                        WeatherStarted(
-                            world_id=clock.world_id,
-                            region_id=region.id,
-                            region_slug=region.slug,
-                            region_name=region.name,
-                            condition=condition,
-                        )
-                    )
-                for condition in stopped:
-                    events.append(
-                        WeatherStopped(
-                            world_id=clock.world_id,
-                            region_id=region.id,
-                            region_slug=region.slug,
-                            region_name=region.name,
-                            condition=condition,
-                        )
-                    )
-
-            log.info(
-                "day %d %02d:00 %s - %d regions, %d events",
-                clock.day,
-                clock.hour,
-                clock.season,
-                len(regions),
-                len(events) - published_before,
-            )
+        log.info(
+            "day %d %02d:00 %s - %d regions, %d events",
+            clock.day,
+            clock.hour,
+            clock.season,
+            len(regions),
+            len(events),
+        )
 
         await session.commit()
 
@@ -201,9 +193,15 @@ async def tick(rng: random.Random) -> list[Event]:
 
 async def run_clock(publisher: EventPublisher) -> None:
     rng = random.Random()
+
+    while (world_id := await claim_world()) is None:
+        log.info("no world to claim, retrying in %ds", CLAIM_RETRY_SECONDS)
+        await asyncio.sleep(CLAIM_RETRY_SECONDS)
+    log.info("claimed world %s as %s", world_id, POD_NAME)
+
     while True:
         await asyncio.sleep(TICK_SECONDS)
-        for event in await tick(rng):
+        for event in await tick(rng, world_id):
             await publisher.publish(event)
 
 
@@ -221,8 +219,6 @@ async def main() -> None:
         ["genesis.world.created", "genesis.region.created"],
     )
     await consumer.connect()
-
-    await bootstrap()
 
     publisher = EventPublisher(AMQP_URL)
     await publisher.connect()

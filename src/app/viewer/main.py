@@ -10,10 +10,11 @@ from domain.atlas import CONTINENTS, OCEAN_COLOUR
 
 GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:8000")
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
+WORLD_ID = os.environ.get("WORLD_ID")
 REFRESH_SECONDS = 0.5
 RESET = "\x1b[0m"
 
-world = {"grid": [], "regions": {}, "order": []}
+world = {"id": None, "grid": [], "regions": {}, "order": []}
 now = {"day": 0, "hour": 0, "season": "winter"}
 
 
@@ -27,10 +28,11 @@ async def load_world() -> None:
         worlds = (await client.get("/worlds")).json()
         if not worlds:
             sys.exit(f"no world yet - create one with: curl -X POST {GENESIS_URL}/worlds")
-        latest = worlds[-1]
-        regions = (await client.get(f"/worlds/{latest['id']}/regions")).json()
+        chosen = next(w for w in worlds if w["id"] == WORLD_ID) if WORLD_ID else worlds[-1]
+        regions = (await client.get(f"/worlds/{chosen['id']}/regions")).json()
 
-    world["grid"] = [[OCEAN_COLOUR] * latest["width"] for _ in range(latest["height"])]
+    world["id"] = chosen["id"]
+    world["grid"] = [[OCEAN_COLOUR] * chosen["width"] for _ in range(chosen["height"])]
 
     for region in regions:
         colour = region["colour"]
@@ -90,6 +92,8 @@ def render() -> None:
 
 
 def apply_event(routing_key: str, payload: dict) -> None:
+    if payload["world_id"] != world["id"]:
+        return
     slug = payload.get("region_slug")
     region = world["regions"].get(slug) if slug else None
 

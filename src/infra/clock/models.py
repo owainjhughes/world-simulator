@@ -1,5 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -15,6 +17,8 @@ class WorldClock(Base):
     day: Mapped[int]
     hour: Mapped[int]
     season: Mapped[str]
+    claimed_by: Mapped[str | None]
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Region(Base):

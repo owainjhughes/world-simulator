@@ -31,7 +31,5 @@ spec:
                 secretKeyRef:
                   name: credentials
                   key: amqp-url
-            - name: GENESIS_URL
-              value: http://genesis:8000
             - name: TICK_SECONDS
               value: "2"

@@ -76,20 +76,20 @@ This is the fastest way to see the whole thing working.
 _Run in the root of this repo:_
 
 ```sh
-make up
-make world
-make viewer
+make run
 ```
 
-That brings up RabbitMQ, a Postgres database for each service and both services, generates a world, and opens the live viewer.
+That brings up RabbitMQ, a Postgres database for each service and both services, waits for them to be healthy, creates a world if none exists yet, and opens the live viewer.
 
-_The same thing without `make`:_
+_The same thing as individual steps:_
 
 ```sh
-docker compose up -d --build
-curl -X POST http://localhost:8000/worlds
-uv run python -m app.viewer.main
+make up       # start the stack
+make world    # create a world - always makes a new one
+make viewer   # watch it
 ```
+
+`make world` creates another world every time you run it, while `make run` only creates one if there are none. Extra worlds sit idle until a clock claims them — more on that below.
 
 If you would rather just read the logs, `make logs` follows the clock:
 
@@ -137,7 +137,7 @@ stringData:
 Kind runs its own container registry inside the cluster, so images built on your machine have to be loaded in explicitly — otherwise Kubernetes will try to pull them from Docker Hub and fail. One command does all three steps:
 
 ```sh
-make deploy-local
+make deploy
 ```
 
 _Or by hand:_
@@ -168,21 +168,42 @@ kubectl get pods -n ecosystem -w
 Once everything is `Running`, create a world and watch it go:
 
 ```sh
-curl -X POST http://localhost:8080/worlds
+curl -X POST http://localhost:18810/worlds
 kubectl logs -n ecosystem deployment/clock -f
+```
+
+Or let one command do the whole thing — deploy, wait for the rollout, create a world if none exists, and open the viewer:
+
+```sh
+make k8s-run
+```
+
+### 🌍🌍 Running more than one world
+
+Each clock pod runs exactly one world, so the number of clock replicas is the number of worlds actually running. Create a second world, scale the clock, and watch the new pod claim it:
+
+```sh
+make k8s-world
+kubectl scale deployment/clock -n ecosystem --replicas=2
+```
+
+`make k8s-worlds` lists every world with its id, and the viewer watches a specific one with:
+
+```sh
+WORLD_ID=<uuid> make k8s-viewer
 ```
 
 # Using the Services
 
 ## Where things are
 
-| Service            | Docker Compose      | Kubernetes (Kind)   |
-| ------------------ | ------------------- | ------------------- |
-| Genesis API        | localhost:8000      | localhost:8080      |
-| Swagger UI         | localhost:8000/docs | localhost:8080/docs |
-| RabbitMQ dashboard | localhost:15672     | localhost:15673     |
-| genesis-db         | localhost:5432      | inside cluster only |
-| clock-db           | localhost:5433      | inside cluster only |
+| Service            | Docker Compose       | Kubernetes (Kind)    |
+| ------------------ | -------------------- | -------------------- |
+| Genesis API        | localhost:18800      | localhost:18810      |
+| Swagger UI         | localhost:18800/docs | localhost:18810/docs |
+| RabbitMQ dashboard | localhost:18802      | localhost:18812      |
+| genesis-db         | localhost:18803      | inside cluster only  |
+| clock-db           | localhost:18804      | inside cluster only  |
 
 The RabbitMQ dashboard logs in with `dev` / `dev`. It is worth opening — you can watch queues fill and drain in real time.
 
@@ -193,6 +214,8 @@ The viewer draws the map and updates it live as events arrive. It reads the worl
 ```sh
 make viewer
 ```
+
+By default it watches the most recently created world. With more than one world running, pick one explicitly with `WORLD_ID=<uuid> make viewer` — events from every other world are ignored.
 
 Each region is drawn in its own colour, with the sea in between. The key is grouped by continent and runs north to south, with each island group listed among the neighbours it sits nearest:
 
@@ -265,10 +288,10 @@ To see it, create a queue bound to just one region and peek at what lands in it:
 
 ```sh
 # Create a queue that only receives Gloamwoods events
-curl -u dev:dev -X PUT http://localhost:15672/api/queues/%2F/peek.gloamwoods \
+curl -u dev:dev -X PUT http://localhost:18802/api/queues/%2F/peek.gloamwoods \
   -H "content-type: application/json" -d '{"durable":true}'
 
-curl -u dev:dev -X POST http://localhost:15672/api/bindings/%2F/e/world.events/q/peek.gloamwoods \
+curl -u dev:dev -X POST http://localhost:18802/api/bindings/%2F/e/world.events/q/peek.gloamwoods \
   -H "content-type: application/json" -d '{"routing_key":"clock.#.gloamwoods"}'
 ```
 
@@ -285,7 +308,7 @@ Note the snow — Gloamwoods had dropped below freezing, so the weather came out
 _Remember to delete the queue when you are done, or it will fill up forever:_
 
 ```sh
-curl -u dev:dev -X DELETE http://localhost:15672/api/queues/%2F/peek.gloamwoods
+curl -u dev:dev -X DELETE http://localhost:18802/api/queues/%2F/peek.gloamwoods
 ```
 
 # Design
@@ -336,7 +359,9 @@ Temperature is not random. Each region has a climate band, and the reading combi
 
 Genesis and Clock have their own Postgres instances and cannot see each other's tables. This is deliberate and it is the source of most of what makes distributed systems interesting: if Clock wants to know what regions exist, it cannot run a join — it has to listen for the events, or ask over HTTP.
 
-Clock does both. It declares its durable queue before anything else, so events published while it was busy still arrive. But if it starts with an empty database and finds it missed the world entirely, it falls back to asking Genesis directly over HTTP. Either way it ends up knowing the world.
+Clock listens. It declares its durable queue before anything else, so worlds created while it was down still arrive as events, and every clock pod shares that queue and one database — whichever pod receives a world's creation event registers it for all of them.
+
+Registration and running are two different things. A registered world just sits in the table until a clock pod claims it: each pod takes out a lease on exactly one world (`SELECT ... FOR UPDATE SKIP LOCKED`, so two pods can never grab the same row), renews it on every tick, and simulates only that world. A pod that finds nothing to claim idles and retries. If a pod dies, its lease expires within 30 seconds and the next pod to start picks the world up. So the number of clock replicas is the dial for how many worlds are actually running — `kubectl scale deployment/clock --replicas=3` means three live worlds, assuming three worlds exist to claim.
 
 ## 📚 Stack
 
@@ -367,7 +392,7 @@ uv run uvicorn app.genesis.main:app --port 8000
 uv run python -m app.clock.main
 ```
 
-Both read `DATABASE_URL` and `AMQP_URL` from the environment. Clock also reads `GENESIS_URL` and `TICK_SECONDS`.
+Both read `DATABASE_URL` and `AMQP_URL` from the environment. Clock also reads `TICK_SECONDS`, and the viewer reads `WORLD_ID`.
 
 ## 📝 Testing
 
@@ -379,17 +404,17 @@ make e2e      # needs the stack running
 
 The **unit tests** cover the `domain/` layer, which is all pure functions: that seasons fall on the right days, that temperature stays inside a region's climate band, that snow falls below freezing and rain above it, that the same seed rebuilds the same world and a different one moves the borders, and that no predator is ever given prey from another region or a carnivore to hunt.
 
-The **end-to-end tests** need `make up` first, and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker to confirm all 21 creation events are published, and then wait for the Clock to notice the new world and start emitting temperature readings for all ten regions. The last one binds a queue to a single region's routing key and asserts nothing from anywhere else arrives.
+The **end-to-end tests** need `make up` first, and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker to confirm all 21 creation events are published, and then confirm that exactly one world is emitting temperature readings and that it covers all ten regions. The last one binds a queue to a single region's routing key and asserts nothing from anywhere else arrives.
 
 > [!NOTE]
-> The end-to-end tests create real worlds, and the Clock will keep simulating every world it has ever been told about. Run `make down` and `make up` if you want to start from an empty slate.
+> The end-to-end tests create real worlds and assume a single clock replica: only one world ever runs, and the extras stay registered but unclaimed and silent. Run them before scaling the clock up, and run `docker compose down -v` if you want to start from an empty slate.
 
 # Looking Forward
 
 This is a work in progress and there is plenty I know is missing or wrong.
 
-- **Clock is a singleton and only crudely protected.** The tick loop advances a single row in the database, so two replicas would both advance it and time would move at double speed. The Deployment uses the `Recreate` strategy so a rolling update cannot briefly run two pods, but nothing stops someone setting `replicas: 2`. A lock on the tick, or a proper leader election lease, would make it impossible rather than merely unlikely.
-- **Nothing limits how many worlds run at once.** Genesis will create as many as you ask for and the Clock simulates every one it hears about, forever. There is no way to pause, stop or delete a world.
+- **Clocks do not redistribute worlds.** A pod claims one world at startup and holds it for life, so scaling down orphans a world until a new pod appears, and a `kubectl rollout restart` leaves up to 30 seconds of silence while the old pod's lease expires. Real systems rebalance work when membership changes; this one deliberately does not, yet.
+- **Worlds pile up.** Genesis will create as many as you ask for, and each sits registered until a clock claims it. There is still no way to pause, stop or delete a world — only to stop running it.
 - **No unit tests for the app layer.** The domain layer is covered, but the tick loop, event handlers and HTTP routes are only exercised end to end.
 - **Events are published after the database commit, not with it.** If a service dies in the gap, the data exists but nobody is ever told. The fix is the transactional outbox pattern: write events to a table in the same transaction, and have a separate process publish them.
 - **No Ecology or Migration services yet.** These are the interesting ones — creatures living in a region, and creatures crossing between regions, which is where handoffs, sagas and eventual consistency actually bite.

@@ -5,8 +5,8 @@ services:
       RABBITMQ_DEFAULT_USER: dev
       RABBITMQ_DEFAULT_PASS: dev
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "18801:5672"
+      - "18802:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
       POSTGRES_PASSWORD: dev
       POSTGRES_DB: genesis
     ports:
-      - "5432:5432"
+      - "18803:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dev -d genesis"]
       interval: 5s
@@ -32,7 +32,7 @@ services:
       POSTGRES_PASSWORD: dev
       POSTGRES_DB: clock
     ports:
-      - "5433:5432"
+      - "18804:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dev -d clock"]
       interval: 5s
@@ -48,7 +48,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://dev:dev@genesis-db:5432/genesis
       AMQP_URL: amqp://dev:dev@rabbitmq/
     ports:
-      - "8000:8000"
+      - "18800:8000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
@@ -69,13 +69,10 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://dev:dev@clock-db:5432/clock
       AMQP_URL: amqp://dev:dev@rabbitmq/
-      GENESIS_URL: http://genesis:8000
       TICK_SECONDS: "2"
     restart: unless-stopped
     depends_on:
       clock-db:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      genesis:
         condition: service_healthy
