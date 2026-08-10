@@ -5,10 +5,16 @@ SEASONS = ("winter", "spring", "summer", "autumn")
 DAYS_PER_SEASON = 30
 DAYS_PER_YEAR = DAYS_PER_SEASON * len(SEASONS)
 HOURS_PER_DAY = 24
+DAWN_HOUR = 6
+DUSK_HOUR = 18
 
 
 def season_for_day(day: int) -> str:
     return SEASONS[(day // DAYS_PER_SEASON) % len(SEASONS)]
+
+
+def is_daytime(hour: int) -> bool:
+    return DAWN_HOUR <= hour < DUSK_HOUR
 
 
 def temperature(climate: dict, day: int, hour: int, rng: random.Random) -> float:

@@ -1,48 +1,29 @@
-import asyncio
-import json
 import os
 import subprocess
 import sys
 
-import aio_pika
 import httpx
 
 GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:18800")
-AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
-SNIFF_SECONDS = 3.0
-
-
-async def sniff_running() -> dict[str, dict]:
-    running: dict[str, dict] = {}
-    connection = await aio_pika.connect_robust(AMQP_URL)
-    async with connection:
-        channel = await connection.channel()
-        exchange = await channel.declare_exchange(
-            "world.events", aio_pika.ExchangeType.TOPIC, durable=True
-        )
-        queue = await channel.declare_queue(exclusive=True)
-        await queue.bind(exchange, routing_key="clock.temperature.changed.#")
-
-        async def drain():
-            async with queue.iterator() as messages:
-                async for message in messages:
-                    async with message.process():
-                        payload = json.loads(message.body)
-                        running[payload["world_id"]] = {
-                            "day": payload["day"],
-                            "hour": payload["hour"],
-                            "season": payload["season"],
-                        }
-
-        task = asyncio.create_task(drain())
-        await asyncio.sleep(SNIFF_SECONDS)
-        task.cancel()
-    return running
+CLOCK_URL = os.environ.get("CLOCK_URL", "http://localhost:18805")
 
 
 def fetch_worlds() -> list[dict]:
     with httpx.Client(base_url=GENESIS_URL, timeout=10) as client:
         return client.get("/worlds").json()
+
+
+def fetch_clocks(worlds: list[dict]) -> dict[str, dict]:
+    running: dict[str, dict] = {}
+    with httpx.Client(base_url=CLOCK_URL, timeout=10) as client:
+        for world in worlds:
+            try:
+                response = client.get(f"/worlds/{world['id']}/clock")
+            except httpx.HTTPError:
+                continue
+            if response.status_code == 200 and (state := response.json())["running"]:
+                running[world["id"]] = state
+    return running
 
 
 def show(worlds: list[dict], running: dict[str, dict]) -> None:
@@ -99,7 +80,7 @@ def remove(world: dict) -> None:
 def main() -> None:
     while True:
         worlds = fetch_worlds()
-        running = asyncio.run(sniff_running())
+        running = fetch_clocks(worlds)
         show(worlds, running)
 
         try:

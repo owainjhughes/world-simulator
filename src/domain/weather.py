@@ -13,7 +13,7 @@ AMBIENT_CHANCES = (("sunshine", 0.15, 0.20), ("wind", 0.12, 0.25))
 
 
 def update_weather(
-    active: list[str], climate: dict, celsius: float, rng: random.Random
+    active: list[str], climate: dict, celsius: float, rng: random.Random, is_day: bool
 ) -> tuple[list[str], list[str], list[str]]:
     current = set(active)
     started: list[str] = []
@@ -31,6 +31,11 @@ def update_weather(
         started.append(condition)
 
     for condition, start_chance, stop_chance in AMBIENT_CHANCES:
+        if condition == "sunshine" and not is_day:
+            if "sunshine" in current:
+                current.discard("sunshine")
+                stopped.append("sunshine")
+            continue
         if condition in current:
             if rng.random() < stop_chance:
                 current.discard(condition)

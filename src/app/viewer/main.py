@@ -2,25 +2,45 @@ import asyncio
 import json
 import os
 import sys
+from collections import deque
+from functools import lru_cache
 
 import aio_pika
 import httpx
 
 from domain.atlas import CONTINENTS, OCEAN_COLOUR
+from domain.seasons import is_daytime
 
 GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:18800")
+CLOCK_URL = os.environ.get("CLOCK_URL", "http://localhost:18805")
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
 WORLD_ID = os.environ.get("WORLD_ID")
 REFRESH_SECONDS = 0.5
 RESET = "\x1b[0m"
+COLUMN = 33
+GLYPHS = {"snow": "*", "rain": "/", "wind": "~"}
 
-world = {"id": None, "grid": [], "regions": {}, "order": []}
-now = {"day": 0, "hour": 0, "season": "winter"}
+world = {"id": None, "grid": [], "owners": [], "regions": {}, "order": []}
+now = {"day": 0, "hour": 0, "season": "winter", "night": False}
+log = deque(maxlen=10)
+screen = {"frame": None, "tick": 0}
 
 
-def paint(colour: str) -> str:
+def rgb(colour: str) -> tuple[int, int, int]:
     red, green, blue = (int(colour[i : i + 2], 16) for i in (1, 3, 5))
-    return f"\x1b[48;2;{red};{green};{blue}m \x1b[49m"
+    return red, green, blue
+
+
+def paint(colour: str, text: str = " ") -> str:
+    red, green, blue = rgb(colour)
+    return f"\x1b[48;2;{red};{green};{blue}m{text}\x1b[49m"
+
+
+@lru_cache
+def shade(colour: str, factor: float) -> str:
+    return "#" + "".join(
+        f"{min(255, int(channel * factor)):02x}" for channel in rgb(colour)
+    )
 
 
 async def load_world() -> None:
@@ -31,8 +51,22 @@ async def load_world() -> None:
         chosen = next(w for w in worlds if w["id"] == WORLD_ID) if WORLD_ID else worlds[-1]
         regions = (await client.get(f"/worlds/{chosen['id']}/regions")).json()
 
+    async with httpx.AsyncClient(base_url=CLOCK_URL, timeout=10) as client:
+        try:
+            response = await client.get(f"/worlds/{chosen['id']}/clock")
+            response.raise_for_status()
+        except httpx.HTTPError:
+            sys.exit(
+                f"clock has no state for world {chosen['id']}"
+                f" - is the clock service running at {CLOCK_URL}?"
+            )
+    state = response.json()
+    now["day"], now["hour"], now["season"] = state["day"], state["hour"], state["season"]
+    now["night"] = not is_daytime(state["hour"])
+
     world["id"] = chosen["id"]
     world["grid"] = [[OCEAN_COLOUR] * chosen["width"] for _ in range(chosen["height"])]
+    world["owners"] = [[None] * chosen["width"] for _ in range(chosen["height"])]
 
     for region in regions:
         colour = region["colour"]
@@ -47,47 +81,86 @@ async def load_world() -> None:
         }
         for x, y in region["tiles"]:
             world["grid"][y][x] = colour
+            world["owners"][y][x] = region["slug"]
+
+
+def glyph_visible(condition: str, x: int, y: int, tick: int) -> bool:
+    if condition == "wind":
+        x -= tick
+    else:
+        y -= tick if condition == "rain" else tick // 2
+    return (x * 2 + y * 3) % 5 == 0
+
+
+def tile(x: int, y: int) -> str:
+    slug = world["owners"][y][x]
+    weather = world["regions"][slug]["weather"] if slug else set()
+    factor = (1.25 if "sunshine" in weather else 1.0) * (0.55 if now["night"] else 1.0)
+    colour = shade(world["grid"][y][x], factor)
+    condition = next((c for c in ("snow", "rain", "wind") if c in weather), None)
+    if condition and glyph_visible(condition, x, y, screen["tick"]):
+        return paint(colour, f"\x1b[97m{GLYPHS[condition]} \x1b[39m")
+    return paint(colour, "  ")
+
+
+def cell(colour: str | None, text: str) -> str:
+    swatch = paint(colour) if colour else " "
+    return swatch + f" {text}"[: COLUMN - 1].ljust(COLUMN - 1)
+
+
+def continent_cells(continent: str) -> list[str]:
+    members = [
+        slug
+        for slug in world["order"]
+        if world["regions"][slug]["continent"] == continent
+    ]
+    if not members:
+        return []
+    members.sort(key=lambda slug: world["regions"][slug]["latitude"])
+    cells = [cell(None, continent)]
+    for slug in members:
+        region = world["regions"][slug]
+        celsius = (
+            "     -" if region["celsius"] is None else f"{region['celsius']:5.1f}C"
+        )
+        weather = " ".join(sorted(region["weather"]))
+        cells.append(cell(region["colour"], f"{region['name']:<16}{celsius} {weather}"))
+    return cells
 
 
 def legend_lines() -> list[str]:
-    lines = []
+    columns = [cells for continent in CONTINENTS if (cells := continent_cells(continent))]
+    if not columns:
+        return []
+    height = max(len(column) for column in columns)
+    for column in columns:
+        column.extend([" " * COLUMN] * (height - len(column)))
+    return ["  " + "".join(row) for row in zip(*columns)]
 
-    for continent in CONTINENTS:
-        members = [
-            slug
-            for slug in world["order"]
-            if world["regions"][slug]["continent"] == continent
-        ]
-        if not members:
-            continue
 
-        members.sort(key=lambda slug: world["regions"][slug]["latitude"])
-        lines.append(f"  {continent}")
-        for slug in members:
-            region = world["regions"][slug]
-            celsius = (
-                "      -" if region["celsius"] is None else f"{region['celsius']:6.1f}C"
-            )
-            weather = " ".join(sorted(region["weather"]))
-            lines.append(
-                f"  {paint(region['colour'])}{RESET} {region['name']:<16}"
-                f"{celsius}  {weather}"
-            )
-        lines.append("")
-
-    return lines
+def lower_lines() -> list[str]:
+    legend = legend_lines()
+    events = ["  World log   [q] menu", *(f"  {entry}" for entry in log)]
+    height = max(len(legend), len(events))
+    legend.extend([" " * (2 + 3 * COLUMN)] * (height - len(legend)))
+    events.extend([""] * (height - len(events)))
+    return [left + right for left, right in zip(legend, events)]
 
 
 def render() -> None:
     lines = [f"  Arathia   day {now['day']}  {now['hour']:02d}:00  {now['season']}", ""]
-    legend = legend_lines()
-
-    for y, row in enumerate(world["grid"]):
-        side = f"   {legend[y]}" if y < len(legend) else ""
-        lines.append("  " + "".join(paint(colour) for colour in row) + side)
+    lines.extend(
+        "  " + "".join(tile(x, y) for x in range(len(row)))
+        for y, row in enumerate(world["grid"])
+    )
+    lines.append("")
+    lines.extend(lower_lines())
 
     body = "\x1b[K\n".join(lines)
-    sys.stdout.write("\x1b[?25l\x1b[H" + body + "\x1b[K\n\x1b[0J")
+    if body == screen["frame"]:
+        return
+    screen["frame"] = body
+    sys.stdout.write("\x1b[?2026h\x1b[?25l\x1b[H" + body + "\x1b[K\n\x1b[0J\x1b[?2026l")
     sys.stdout.flush()
 
 
@@ -104,15 +177,25 @@ def apply_event(routing_key: str, payload: dict) -> None:
         now["hour"] = payload["hour"]
         now["season"] = payload["season"]
     elif routing_key.startswith("clock.weather.") and region:
+        stamp = f"day {now['day']} {now['hour']:02d}:00"
         if routing_key.endswith(f".started.{slug}"):
             region["weather"].add(payload["condition"])
+            log.append(f"{stamp}  {payload['condition']} started in {region['name']}")
         else:
             region["weather"].discard(payload["condition"])
+            log.append(f"{stamp}  {payload['condition']} stopped in {region['name']}")
+    elif routing_key == "clock.day.arrived":
+        now["night"] = False
+    elif routing_key == "clock.night.arrived":
+        now["night"] = True
     elif routing_key == "clock.season.changed":
         now["season"] = payload["season"]
+        log.append(
+            f"day {now['day']} {now['hour']:02d}:00  season changed to {payload['season']}"
+        )
 
 
-async def consume() -> None:
+async def bind_queue() -> aio_pika.abc.AbstractQueue:
     connection = await aio_pika.connect_robust(AMQP_URL)
     channel = await connection.channel()
     exchange = await channel.declare_exchange(
@@ -120,7 +203,10 @@ async def consume() -> None:
     )
     queue = await channel.declare_queue(exclusive=True)
     await queue.bind(exchange, routing_key="clock.#")
+    return queue
 
+
+async def consume(queue: aio_pika.abc.AbstractQueue) -> None:
     async with queue.iterator() as messages:
         async for message in messages:
             async with message.process():
@@ -130,18 +216,40 @@ async def consume() -> None:
 async def redraw() -> None:
     while True:
         render()
+        screen["tick"] += 1
         await asyncio.sleep(REFRESH_SECONDS)
+
+
+def read_key() -> str:
+    if sys.platform == "win32":
+        import msvcrt
+
+        return msvcrt.getch().decode(errors="ignore").lower()
+    return sys.stdin.read(1).lower()
+
+
+async def watch_keys() -> None:
+    loop = asyncio.get_running_loop()
+    while await loop.run_in_executor(None, read_key) != "q":
+        pass
 
 
 async def main() -> None:
     if sys.platform == "win32":
         os.system("")
+    queue = await bind_queue()
     await load_world()
-    await asyncio.gather(consume(), redraw())
+    sys.stdout.write("\x1b[?1049h")
+    tasks = [asyncio.create_task(work) for work in (consume(queue), redraw())]
+    await watch_keys()
+    for task in tasks:
+        task.cancel()
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        sys.stdout.write(RESET + "\x1b[?25h\n")
+        pass
+    finally:
+        sys.stdout.write("\x1b[?1049l" + RESET + "\x1b[?25h")
