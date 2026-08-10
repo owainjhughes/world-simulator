@@ -18,7 +18,9 @@ DRY = {
 
 def _run_until_precipitation(climate, celsius, seed_limit=200):
     for seed in range(seed_limit):
-        active, started, _ = update_weather([], climate, celsius, random.Random(seed))
+        active, started, _ = update_weather(
+            [], climate, celsius, random.Random(seed), True
+        )
         precipitation = {"rain", "snow"} & set(started)
         if precipitation:
             return precipitation.pop()
@@ -37,7 +39,7 @@ def test_rain_and_snow_never_fall_together():
     rng = random.Random(7)
     active = ["rain"]
     for _ in range(500):
-        active, _, _ = update_weather(active, WET, -5.0, rng)
+        active, _, _ = update_weather(active, WET, -5.0, rng, True)
         assert not {"rain", "snow"}.issubset(set(active))
 
 
@@ -46,7 +48,7 @@ def test_arid_regions_stay_drier_than_torrential_ones():
         rng = random.Random(3)
         active, count = [], 0
         for _ in range(2000):
-            active, _, _ = update_weather(active, climate, 15.0, rng)
+            active, _, _ = update_weather(active, climate, 15.0, rng, True)
             if "rain" in active:
                 count += 1
         return count
@@ -56,6 +58,20 @@ def test_arid_regions_stay_drier_than_torrential_ones():
 
 def test_stopping_reports_what_was_active():
     rng = random.Random(0)
-    active, started, stopped = update_weather(["rain"], WET, 15.0, rng)
+    active, started, stopped = update_weather(["rain"], WET, 15.0, rng, True)
     for condition in stopped:
         assert condition not in active
+
+
+def test_sunshine_never_starts_at_night():
+    for seed in range(200):
+        _, started, _ = update_weather([], WET, 15.0, random.Random(seed), False)
+        assert "sunshine" not in started
+
+
+def test_sunshine_stops_the_tick_night_arrives():
+    active, _, stopped = update_weather(
+        ["sunshine"], WET, 15.0, random.Random(0), False
+    )
+    assert "sunshine" in stopped
+    assert "sunshine" not in active

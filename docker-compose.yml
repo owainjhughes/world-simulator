@@ -70,7 +70,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://dev:dev@clock-db:5432/clock
       AMQP_URL: amqp://dev:dev@rabbitmq/
       TICK_SECONDS: "2"
+    ports:
+      - "18805:8000"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 5s
+      retries: 12
     depends_on:
       clock-db:
         condition: service_healthy

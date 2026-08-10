@@ -6,17 +6,10 @@ import socket
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import uvicorn
+from fastapi import FastAPI, HTTPException
 from sqlalchemy import delete, or_, select
 
-from domain.seasons import (
-    DAYS_PER_SEASON,
-    HOURS_PER_DAY,
-    season_for_day,
-    temperature,
-)
-from domain.weather import update_weather
-from infra.clock.db import Session, engine
-from infra.clock.models import Base, Region, WorldClock
 from domain.events import (
     DayArrived,
     Event,
@@ -30,6 +23,18 @@ from domain.events import (
     WorldCreated,
     WorldDeleted,
 )
+from domain.seasons import (
+    DAWN_HOUR,
+    DAYS_PER_SEASON,
+    DUSK_HOUR,
+    HOURS_PER_DAY,
+    is_daytime,
+    season_for_day,
+    temperature,
+)
+from domain.weather import update_weather
+from infra.clock.db import Session, engine
+from infra.clock.models import Base, Region, WorldClock
 from infra.messaging.consumer import EventConsumer
 from infra.messaging.publisher import EventPublisher
 
@@ -40,6 +45,30 @@ CLAIM_RETRY_SECONDS = 5
 POD_NAME = socket.gethostname()
 
 log = logging.getLogger("clock")
+
+app = FastAPI(title="World Clock")
+
+
+@app.get("/health")
+async def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/worlds/{world_id}/clock")
+async def read_clock(world_id: UUID) -> dict:
+    async with Session() as session:
+        clock = await session.get(WorldClock, world_id)
+    if clock is None:
+        raise HTTPException(status_code=404, detail="world not found")
+    running = (
+        clock.claimed_by is not None and clock.lease_expires_at > datetime.now(UTC)
+    )
+    return {
+        "day": clock.day,
+        "hour": clock.hour,
+        "season": clock.season,
+        "running": running,
+    }
 
 
 async def handle_event(routing_key: str, payload: dict) -> None:
@@ -116,9 +145,9 @@ async def tick(rng: random.Random, world_id: UUID) -> list[Event]:
             clock.hour = 0
             clock.day += 1
 
-        if clock.hour == 6:
+        if clock.hour == DAWN_HOUR:
             events.append(DayArrived(world_id=clock.world_id, day=clock.day))
-        elif clock.hour == 18:
+        elif clock.hour == DUSK_HOUR:
             events.append(NightArrived(world_id=clock.world_id, day=clock.day))
 
         if clock.hour == 0:
@@ -162,7 +191,7 @@ async def tick(rng: random.Random, world_id: UUID) -> list[Event]:
             )
 
             active, started, stopped = update_weather(
-                region.weather, region.climate, celsius, rng
+                region.weather, region.climate, celsius, rng, is_daytime(clock.hour)
             )
             if started or stopped:
                 region.weather = active
@@ -233,8 +262,14 @@ async def main() -> None:
     publisher = EventPublisher(AMQP_URL)
     await publisher.connect()
 
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="0.0.0.0", port=8000, access_log=False)
+    )
+
     log.info("clock running, tick every %.1fs", TICK_SECONDS)
-    await asyncio.gather(consumer.consume(handle_event), run_clock(publisher))
+    await asyncio.gather(
+        consumer.consume(handle_event), run_clock(publisher), server.serve()
+    )
 
 
 if __name__ == "__main__":

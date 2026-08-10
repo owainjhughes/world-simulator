@@ -1,14 +1,17 @@
 import asyncio
 import json
 import os
+from uuid import uuid4
 
 import aio_pika
 import httpx
 import pytest
 
 from domain.atlas import REGIONS
+from domain.seasons import SEASONS
 
 GENESIS_URL = os.environ.get("GENESIS_URL", "http://localhost:18800")
+CLOCK_URL = os.environ.get("CLOCK_URL", "http://localhost:18805")
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
 EVENT_TIMEOUT = 90
 
@@ -47,6 +50,15 @@ async def collect(
         return received
 
 
+async def ensure_worlds() -> list[dict]:
+    async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=30) as client:
+        worlds = (await client.get("/worlds")).json()
+        if not worlds:
+            await client.post("/worlds")
+            worlds = (await client.get("/worlds")).json()
+    return worlds
+
+
 async def test_genesis_creates_a_complete_world():
     async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=30) as client:
         created = (await client.post("/worlds")).json()
@@ -83,9 +95,7 @@ async def test_creating_a_world_announces_it_on_the_broker():
 
 
 async def test_the_clock_runs_exactly_one_world_across_all_regions():
-    async with httpx.AsyncClient(base_url=GENESIS_URL, timeout=30) as client:
-        if not (await client.get("/worlds")).json():
-            await client.post("/worlds")
+    await ensure_worlds()
 
     seen: dict[str, set[str]] = {}
 
@@ -131,6 +141,30 @@ async def test_deleting_a_world_removes_it_and_announces_it():
 
     events = await listener
     assert world_id in {payload["world_id"] for _, payload in events}
+
+
+async def test_the_clock_endpoint_reports_time_for_a_running_world():
+    worlds = await ensure_worlds()
+
+    async def poll():
+        async with httpx.AsyncClient(base_url=CLOCK_URL, timeout=10) as client:
+            while True:
+                for world in worlds:
+                    response = await client.get(f"/worlds/{world['id']}/clock")
+                    if response.status_code == 200 and response.json()["running"]:
+                        return response.json()
+                await asyncio.sleep(1)
+
+    state = await asyncio.wait_for(poll(), timeout=EVENT_TIMEOUT)
+    assert state["season"] in SEASONS
+    assert 0 <= state["hour"] < 24
+    assert state["day"] >= 0
+
+
+async def test_the_clock_endpoint_404s_for_unknown_worlds():
+    async with httpx.AsyncClient(base_url=CLOCK_URL, timeout=10) as client:
+        response = await client.get(f"/worlds/{uuid4()}/clock")
+    assert response.status_code == 404
 
 
 async def test_region_routing_keys_deliver_only_that_region():
