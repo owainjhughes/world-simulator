@@ -1,6 +1,6 @@
-# Arathia
+# World Simulator (Arathia)
 
-> Owain Hughes // owainjhughes@gmail.com // github.com/owainjhughes/arathia
+> Owain Hughes // owainjhughes@gmail.com // github.com/owainjhughes/world-simulator
 
 ## Overview
 
@@ -15,13 +15,13 @@ flowchart LR
     Clock --- ClockDB[(clock-db)]
 ```
 
-Arathia is a distributed simulation of a living world, built to learn distributed computing properly rather than to ship a product.
+Arathia is a distributed simulation of a living world, built to learn distributed computing.
 
 A world is generated once: three continents and two island groups carved into fourteen named regions, each populated with its own invented species that have diets, temperature preferences, movement types and a food web. From then on the world runs on its own — time passes, seasons turn, temperatures rise and fall with the hour and the season, and weather comes and goes region by region.
 
-Nothing in the system calls anything else directly. Each service announces what has happened as events on RabbitMQ, and any service that cares subscribes. Every service owns its own database and nobody reads anyone else's.
+Nothing in the system calls anything else directly. Each service announces what has happened as events on RabbitMQ, and any service that cares subscribes. Every service owns its own database.
 
-Here is a world Genesis actually produced, one character per tile, `.` for open sea:
+Here is a world Genesis produced, one character per tile, `.` for open sea:
 
 ```
 .................................................LLL............................
@@ -51,13 +51,19 @@ Roughly 28% of the map is land. The continent outlines and the position of every
 
 Ocean is simply any tile no region owns, which makes water a real barrier: something that walks cannot cross it, something that swims can, and something that flies does not care.
 
+## Map
+
+Here is the original painted map that the world creation is based off of:
+
+<img width="1152" height="864" alt="arathia" src="https://github.com/user-attachments/assets/e58f8fcc-1eaa-4c89-a5d4-8e1847474a1d" />
+
 ## Features
 
 - Procedural world generation: fourteen regions across three continents and two island groups on an 80x50 grid, with coastlines and borders that shift between runs
 - Invented species per region, named from word banks, with randomised traits and wired-up predator/prey relationships
 - A world clock with day/night, four seasons, and temperature that follows both the hour and the time of year
 - Per-region weather, where snow rather than rain falls if the region is below freezing
-- Fully event-driven: services never call each other, they publish facts and subscribe to the ones they care about
+- Fully event-driven: services never call each other, fully pub/sub 
 - A live terminal viewer that draws the world and updates as it runs
 - Runs either on Docker Compose or on a local Kubernetes cluster with Kind
 
@@ -71,7 +77,7 @@ Ocean is simply any tile no region owns, which makes water a real barrier: somet
 
 ## 🐳 The quick way: Docker Compose
 
-This is the fastest way to see the whole thing working.
+This is the fastest way to see it working.
 
 _Run in the root of this repo:_
 
@@ -79,7 +85,7 @@ _Run in the root of this repo:_
 make run
 ```
 
-That brings up RabbitMQ, a Postgres database for each service and both services, waits for them to be healthy, creates a world if none exists yet, and opens the live viewer.
+That starts RabbitMQ, a Postgres database for each service and both services, waits for them to be healthy, creates a world if none exists yet, and opens the live viewer.
 
 _The same thing as individual steps:_
 
@@ -89,7 +95,7 @@ make world    # create a world - always makes a new one
 make viewer   # watch it
 ```
 
-`make world` creates another world every time you run it, while `make run` only creates one if there are none. Extra worlds sit idle until a clock claims them — more on that below.
+`make world` creates another world every time you run it, while `make run` only creates one if there are none. Extra worlds sit idle until a clock claims them.
 
 If you would rather just read the logs, `make logs` follows the clock:
 
@@ -98,7 +104,7 @@ clock  | day 0 06:00 winter - 14 regions, 21 events
 clock  | day 0 07:00 winter - 14 regions, 17 events
 ```
 
-## ☸ The interesting way: Kubernetes with Kind
+## ☸ Kubernetes with Kind
 
 ### 🛞 Create a cluster
 
@@ -251,7 +257,7 @@ Each region is drawn in its own colour, with the sea in between. The key is grou
                           Stragglefaun      25.3C  sunshine
 ```
 
-That is a real frame. Note Wailfirth getting snow while everywhere else with weather gets none — it is the only region below freezing at that moment.
+That is a real frame. Note Wailfirth getting snow while everywhere else with weather gets none.
 
 The viewer holds no state of its own and never talks to a database. It is just another subscriber, which is what makes it a good demonstration of the whole design: you can start it, stop it, and start it again, and the simulation neither knows nor cares.
 
@@ -322,7 +328,7 @@ curl -u dev:dev -X DELETE http://localhost:18802/api/queues/%2F/peek.gloamwoods
 
 # Design
 
-## 🎨 How the code is laid out
+## 🎨 Directory Structure
 
 Everything lives under [`src/`](src), split into three layers so it is easy to find what you are looking for:
 
