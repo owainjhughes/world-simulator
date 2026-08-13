@@ -17,6 +17,7 @@ spec:
       containers:
         - name: postgres
           image: postgres:17
+          args: ["-c", "wal_level=logical"]
           ports:
             - name: postgres
               containerPort: 5432

@@ -14,6 +14,7 @@ services:
 
   genesis-db:
     image: postgres:17
+    command: postgres -c wal_level=logical
     environment:
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev
@@ -27,6 +28,7 @@ services:
 
   clock-db:
     image: postgres:17
+    command: postgres -c wal_level=logical
     environment:
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev
@@ -46,7 +48,6 @@ services:
     command: uvicorn app.genesis.main:app --host 0.0.0.0 --port 8000
     environment:
       DATABASE_URL: postgresql+asyncpg://dev:dev@genesis-db:5432/genesis
-      AMQP_URL: amqp://dev:dev@rabbitmq/
     ports:
       - "18800:8000"
     restart: unless-stopped
@@ -56,8 +57,6 @@ services:
       retries: 12
     depends_on:
       genesis-db:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
 
   clock:
@@ -81,4 +80,40 @@ services:
       clock-db:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+
+  debezium-genesis:
+    image: quay.io/debezium/server:3.6.1.Final
+    environment:
+      DEBEZIUM_SOURCE_DATABASE_HOSTNAME: genesis-db
+      DEBEZIUM_SOURCE_DATABASE_DBNAME: genesis
+      DEBEZIUM_SOURCE_TOPIC_PREFIX: genesis
+    volumes:
+      - ./deploy/debezium/application.properties:/debezium/config/application.properties:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 5s
+      retries: 24
+    depends_on:
+      genesis:
+        condition: service_healthy
+      clock:
+        condition: service_healthy
+
+  debezium-clock:
+    image: quay.io/debezium/server:3.6.1.Final
+    environment:
+      DEBEZIUM_SOURCE_DATABASE_HOSTNAME: clock-db
+      DEBEZIUM_SOURCE_DATABASE_DBNAME: clock
+      DEBEZIUM_SOURCE_TOPIC_PREFIX: clock
+    volumes:
+      - ./deploy/debezium/application.properties:/debezium/config/application.properties:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 5s
+      retries: 24
+    depends_on:
+      clock:
         condition: service_healthy

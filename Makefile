@@ -73,6 +73,8 @@ kind-logs:
 kind-wait:
 	kubectl rollout status -n $(NAMESPACE) deployment/genesis --timeout=180s
 	kubectl rollout status -n $(NAMESPACE) deployment/clock --timeout=180s
+	kubectl rollout status -n $(NAMESPACE) deployment/debezium-genesis --timeout=180s
+	kubectl rollout status -n $(NAMESPACE) deployment/debezium-clock --timeout=180s
 
 kind-run: deploy kind-wait ensure-world kind-viewer
 
