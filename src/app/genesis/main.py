@@ -1,4 +1,3 @@
-import os
 import random
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -10,18 +9,15 @@ from domain.events import WorldDeleted
 from domain.world import generate_world
 from infra.genesis.db import Session, engine
 from infra.genesis.models import Base, Region, Species, World
-from infra.messaging.publisher import EventPublisher
-
-publisher = EventPublisher(os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/"))
+from infra.messaging.outbox import OutboxBase, add_events
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
-    await publisher.connect()
+        await connection.run_sync(OutboxBase.metadata.create_all)
     yield
-    await publisher.close()
 
 
 app = FastAPI(title="World Genesis", lifespan=lifespan)
@@ -74,13 +70,8 @@ async def create_world(seed: int | None = None):
             for event in species_events
             for profile in event.species
         )
+        await add_events(session, [world, *regions, *species_events])
         await session.commit()
-
-    await publisher.publish(world)
-    for region in regions:
-        await publisher.publish(region)
-    for event in species_events:
-        await publisher.publish(event)
 
     return {
         "world_id": world.world_id,
@@ -99,9 +90,9 @@ async def delete_world(world_id: UUID):
         await session.execute(delete(Species).where(Species.world_id == world_id))
         await session.execute(delete(Region).where(Region.world_id == world_id))
         await session.delete(world)
+        await add_events(session, [WorldDeleted(world_id=world_id)])
         await session.commit()
 
-    await publisher.publish(WorldDeleted(world_id=world_id))
     return {"deleted": world_id}
 
 

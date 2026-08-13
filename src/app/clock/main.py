@@ -36,7 +36,7 @@ from domain.weather import update_weather
 from infra.clock.db import Session, engine
 from infra.clock.models import Base, Region, WorldClock
 from infra.messaging.consumer import EventConsumer
-from infra.messaging.publisher import EventPublisher
+from infra.messaging.outbox import OutboxBase, add_events
 
 AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost/")
 TICK_SECONDS = float(os.environ.get("TICK_SECONDS", "2"))
@@ -127,7 +127,7 @@ async def claim_world() -> UUID | None:
         return clock.world_id
 
 
-async def tick(rng: random.Random, world_id: UUID) -> list[Event]:
+async def tick(rng: random.Random, world_id: UUID) -> None:
     events: list[Event] = []
 
     async with Session() as session:
@@ -225,12 +225,11 @@ async def tick(rng: random.Random, world_id: UUID) -> list[Event]:
             len(events),
         )
 
+        await add_events(session, events)
         await session.commit()
 
-    return events
 
-
-async def run_clock(publisher: EventPublisher) -> None:
+async def run_clock() -> None:
     rng = random.Random()
 
     while (world_id := await claim_world()) is None:
@@ -240,8 +239,7 @@ async def run_clock(publisher: EventPublisher) -> None:
 
     while True:
         await asyncio.sleep(TICK_SECONDS)
-        for event in await tick(rng, world_id):
-            await publisher.publish(event)
+        await tick(rng, world_id)
 
 
 async def main() -> None:
@@ -251,6 +249,7 @@ async def main() -> None:
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.run_sync(OutboxBase.metadata.create_all)
 
     consumer = EventConsumer(
         AMQP_URL,
@@ -259,17 +258,12 @@ async def main() -> None:
     )
     await consumer.connect()
 
-    publisher = EventPublisher(AMQP_URL)
-    await publisher.connect()
-
     server = uvicorn.Server(
         uvicorn.Config(app, host="0.0.0.0", port=8000, access_log=False)
     )
 
     log.info("clock running, tick every %.1fs", TICK_SECONDS)
-    await asyncio.gather(
-        consumer.consume(handle_event), run_clock(publisher), server.serve()
-    )
+    await asyncio.gather(consumer.consume(handle_event), run_clock(), server.serve())
 
 
 if __name__ == "__main__":

@@ -7,12 +7,14 @@
 ```mermaid
 flowchart LR
     User([You]) -->|POST /worlds| Genesis
-    Genesis -->|world, region and species events| Exchange{{world.events<br/>topic exchange}}
-    Exchange --> ClockQueue[[clock.genesis queue]]
-    ClockQueue --> Clock
-    Clock -->|time, temperature and weather events| Exchange
     Genesis --- GenesisDB[(genesis-db)]
     Clock --- ClockDB[(clock-db)]
+    GenesisDB -->|WAL| DebeziumG[Debezium]
+    ClockDB -->|WAL| DebeziumC[Debezium]
+    DebeziumG -->|world, region and species events| Exchange{{world.events<br/>topic exchange}}
+    DebeziumC -->|time, temperature and weather events| Exchange
+    Exchange --> ClockQueue[[clock.genesis queue]]
+    ClockQueue --> Clock
 ```
 
 Arathia is a distributed simulation of a living world, built to learn distributed computing.
@@ -85,7 +87,7 @@ _Run in the root of this repo:_
 make run
 ```
 
-That starts RabbitMQ, a Postgres database for each service and both services, waits for them to be healthy, creates a world if none exists yet, and opens the live viewer.
+That starts RabbitMQ, a Postgres database for each service, both services and a [Debezium](https://debezium.io/) relay for each database, waits for them to be healthy, creates a world if none exists yet, and opens the live viewer.
 
 _The same thing as individual steps:_
 
@@ -340,7 +342,7 @@ src/
 ```
 
 - **`domain/`** — the rules of the world, with no I/O at all. World generation, species traits, how temperature moves through a day, when it rains, and the event schemas that make up the shared language. You can read and test all of it without a database or a broker anywhere near it, which is exactly what the unit tests do.
-- **`infra/`** — everything that talks to the outside world: database engines, SQLAlchemy models, and the RabbitMQ publisher and consumer.
+- **`infra/`** — everything that talks to the outside world: database engines, SQLAlchemy models, the RabbitMQ consumer and the outbox.
 - **`app/`** — the entrypoints, which wire the two together. HTTP routes for Genesis, the tick loop and event handlers for Clock, the renderer for the viewer.
 
 The services share one codebase and one image, and differ only in the command they are started with. They still deploy separately, own separate databases, and never read each other's tables.
@@ -348,6 +350,11 @@ The services share one codebase and one image, and differ only in the command th
 ## 📡 Events
 
 Services communicate through a RabbitMQ topic exchange called `world.events`. A publisher never knows who is listening.
+
+No service publishes to RabbitMQ directly, because writing to the database and then publishing are two separate writes, and a crash between them would leave a fact in the database that nobody was ever told about. Instead, each service writes its events into an `outbox` table in the same transaction as the data they describe, and a [Debezium Server](https://debezium.io/documentation/reference/stable/operations/debezium-server.html) instance per database reads them straight out of Postgres's write-ahead log and publishes them — the transactional outbox pattern. The routing key and JSON body on the wire are exactly what the service wrote into the table.
+
+> [!NOTE]
+> The `outbox` tables are always empty, and that is not a bug. Each event row is inserted and deleted in the same transaction — Debezium reads the WAL, not the table, so the insert still reaches the broker while the table never grows.
 
 | Event                | Routing key                                 | Published by |
 | -------------------- | ------------------------------------------- | ------------ |
@@ -384,6 +391,7 @@ Registration and running are two different things. A registered world just sits 
 - **[FastAPI](https://fastapi.tiangolo.com/) and [Pydantic](https://docs.pydantic.dev/)**
 - **[RabbitMQ](https://www.rabbitmq.com/)**
 - **[PostgreSQL](https://www.postgresql.org/)**
+- **[Debezium Server](https://debezium.io/)**
 - **[Docker Compose](https://docs.docker.com/compose/) and [Kind](https://kind.sigs.k8s.io/).**
 
 # Development
@@ -399,15 +407,16 @@ That installs the project itself as well as its dependencies, so `app`, `domain`
 You can run either service directly against the containerised infrastructure, which is much faster than rebuilding images:
 
 ```sh
-# Start just the infrastructure
+# Start just the infrastructure (--no-deps stops the Debezium relays dragging in the containerised clock)
 docker compose up -d rabbitmq genesis-db clock-db
+docker compose up -d --no-deps debezium-genesis debezium-clock
 
 # Run the services on your machine
 uv run uvicorn app.genesis.main:app --port 8000
 uv run python -m app.clock.main
 ```
 
-Both read `DATABASE_URL` and `AMQP_URL` from the environment. Clock also reads `TICK_SECONDS`, and the viewer reads `WORLD_ID`.
+Both read `DATABASE_URL` from the environment. Clock also reads `AMQP_URL` and `TICK_SECONDS`, and the viewer reads `WORLD_ID`.
 
 ## 📝 Testing
 
@@ -431,7 +440,6 @@ This is a work in progress and there is plenty I know is missing or wrong.
 - **Clocks do not redistribute worlds.** A pod claims one world at startup and holds it for life, so scaling down orphans a world until a new pod appears, and a `kubectl rollout restart` leaves up to 30 seconds of silence while the old pod's lease expires. Real systems rebalance work when membership changes; this one deliberately does not, yet.
 - **Worlds pile up.** Genesis will create as many as you ask for, and each sits registered until a clock claims it. There is still no way to pause, stop or delete a world — only to stop running it.
 - **No unit tests for the app layer.** The domain layer is covered, but the tick loop, event handlers and HTTP routes are only exercised end to end.
-- **Events are published after the database commit, not with it.** If a service dies in the gap, the data exists but nobody is ever told. The fix is the transactional outbox pattern: write events to a table in the same transaction, and have a separate process publish them.
 - **No Ecology or Migration services yet.** These are the interesting ones — creatures living in a region, and creatures crossing between regions, which is where handoffs, sagas and eventual consistency actually bite.
 - **No observability.** The plan is OpenTelemetry with SigNoz, so a single world creation can be traced across both services.
 - **Raw YAML instead of a Helm chart.** Fine for one environment, but the services are nearly identical, so one templated chart would replace most of `deploy/k8s/`.
