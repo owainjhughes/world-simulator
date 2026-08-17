@@ -1,0 +1,16 @@
+apiVersion: skaffold/v4beta13
+kind: Config
+metadata:
+  name: arathia
+build:
+  artifacts:
+    - image: arathia
+      docker:
+        dockerfile: deploy/docker/Dockerfile
+  local:
+    push: false
+manifests:
+  rawYaml:
+    - deploy/k8s/*.yaml
+deploy:
+  kubectl: {}

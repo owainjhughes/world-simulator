@@ -171,3 +171,41 @@ async def test_region_routing_keys_deliver_only_that_region():
     events = await collect("clock.#.wylenn", 10, asyncio.Event())
     assert events, "no wylenn events seen - is the clock running?"
     assert {payload["region_slug"] for _, payload in events} == {"wylenn"}
+
+
+async def test_ecology_counts_every_region_and_puts_creatures_in_them():
+    await ensure_worlds()
+
+    censuses: dict[str, dict] = {}
+
+    async def watch():
+        connection = await aio_pika.connect_robust(AMQP_URL)
+        async with connection:
+            channel = await connection.channel()
+            exchange = await channel.declare_exchange(
+                "world.events", aio_pika.ExchangeType.TOPIC, durable=True
+            )
+            queue = await channel.declare_queue(exclusive=True)
+            await queue.bind(exchange, routing_key="ecology.census.#")
+
+            async with queue.iterator() as messages:
+                async for message in messages:
+                    async with message.process():
+                        payload = json.loads(message.body)
+                        censuses[payload["region_slug"]] = payload
+                        if len(censuses) == REGION_COUNT:
+                            return
+
+    await asyncio.wait_for(watch(), timeout=EVENT_TIMEOUT)
+
+    assert len(censuses) == REGION_COUNT
+    assert all(
+        any(payload.get(diet) for diet in ("herbivores", "carnivores", "omnivores"))
+        for payload in censuses.values()
+    )
+
+
+async def test_ecology_routing_keys_deliver_only_that_region():
+    events = await collect("ecology.#.wylenn", 12, asyncio.Event())
+    assert events, "no wylenn ecology events seen - is ecology running?"
+    assert {payload["region_slug"] for _, payload in events} == {"wylenn"}

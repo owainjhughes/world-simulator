@@ -78,15 +78,18 @@ def test_species_names_are_unique_across_the_world():
     assert len(names) == len(set(names))
 
 
-def test_predators_only_hunt_non_carnivores_in_their_own_region():
+def test_predators_only_hunt_non_carnivores_they_could_actually_meet():
     _, _, species_events = generate_world(seed=4)
-    for event in species_events:
-        local = {profile.name: profile for profile in event.species}
-        for profile in event.species:
-            for prey in profile.prey:
-                assert prey in local
-                assert prey != profile.name
-                assert local[prey].diet != "carnivore"
+    everything = {
+        profile.name: profile for event in species_events for profile in event.species
+    }
+    for profile in everything.values():
+        for name in profile.prey:
+            prey = everything[name]
+            assert name != profile.name
+            assert prey.diet != "carnivore"
+            assert prey.min_temperature <= profile.max_temperature
+            assert profile.min_temperature <= prey.max_temperature
 
 
 def test_herbivores_eat_plants_and_hunt_nothing():
@@ -98,6 +101,19 @@ def test_herbivores_eat_plants_and_hunt_nothing():
                 assert profile.food
             if profile.diet == "carnivore":
                 assert profile.food == []
+
+
+def test_species_only_eat_plants_that_grow_where_they_were_born():
+    _, regions, species_events = generate_world(seed=7)
+    plants_of = {region.region_id: region.climate.plants for region in regions}
+    for event in species_events:
+        for profile in event.species:
+            assert set(profile.food) <= set(plants_of[event.region_id])
+
+
+def test_every_region_grows_something():
+    _, regions, _ = generate_world(seed=8)
+    assert all(region.climate.plants for region in regions)
 
 
 def test_temperature_preferences_are_the_right_way_round():

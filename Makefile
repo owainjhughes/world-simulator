@@ -1,4 +1,3 @@
-IMAGE := arathia:dev
 CLUSTER := ecosystem
 NAMESPACE := ecosystem
 
@@ -9,9 +8,9 @@ export GENESIS_URL
 export CLOCK_URL
 export AMQP_URL
 
-.PHONY: run up down logs world ensure-world viewer test unit e2e \
-        cluster-up cluster-down deploy build-image load-image apply \
-        kind-run kind-wait kind-logs kind-world kind-worlds kind-viewer kind-e2e
+.PHONY: run up down logs logs-ecology world ensure-world viewer test unit e2e \
+        cluster-up cluster-down deploy kind-dev \
+        kind-run kind-logs kind-world kind-worlds kind-viewer kind-e2e
 
 # ---- Docker Compose ----
 
@@ -25,6 +24,9 @@ down:
 
 logs:
 	docker compose logs -f clock
+
+logs-ecology:
+	docker compose logs -f ecology
 
 world:
 	curl -X POST $(GENESIS_URL)/worlds
@@ -55,28 +57,16 @@ cluster-up:
 cluster-down:
 	kind delete cluster --name $(CLUSTER)
 
-build-image:
-	docker build -t $(IMAGE) -f deploy/docker/Dockerfile .
+deploy:
+	skaffold run
 
-load-image:
-	kind load docker-image $(IMAGE) --name $(CLUSTER)
-
-apply:
-	kubectl apply -f deploy/k8s/
-
-deploy: build-image load-image apply
-	kubectl rollout restart -n $(NAMESPACE) deployment/genesis deployment/clock
+kind-dev:
+	skaffold dev
 
 kind-logs:
 	kubectl logs -n $(NAMESPACE) deployment/clock -f
 
-kind-wait:
-	kubectl rollout status -n $(NAMESPACE) deployment/genesis --timeout=180s
-	kubectl rollout status -n $(NAMESPACE) deployment/clock --timeout=180s
-	kubectl rollout status -n $(NAMESPACE) deployment/debezium-genesis --timeout=180s
-	kubectl rollout status -n $(NAMESPACE) deployment/debezium-clock --timeout=180s
-
-kind-run: deploy kind-wait ensure-world kind-viewer
+kind-run: deploy ensure-world kind-viewer
 
 kind-world:
 	curl -X POST $(GENESIS_URL)/worlds

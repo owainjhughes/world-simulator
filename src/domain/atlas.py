@@ -8,79 +8,79 @@ CONTINENTS = ("Northsaw", "Kuerigo", "Eastern Isles")
 REGIONS = [
     (
         "b", "Boring Tundra", "Northsaw", "#8B5A2B",
-        Climate(terrain="tundra", min_temperature=-25, max_temperature=8, rainfall="low"),
+        Climate(terrain="tundra", min_temperature=-25, max_temperature=8, rainfall="low", plants=["lichen", "moss", "bitterroot"]),
     ),
     (
         "c", "Chillcap", "Northsaw", "#1D46B4",
-        Climate(terrain="ice cap", min_temperature=-40, max_temperature=-8, rainfall="low"),
+        Climate(terrain="ice cap", min_temperature=-40, max_temperature=-8, rainfall="low", plants=["lichen", "moss"]),
     ),
     (
         "s", "Shard Forest", "Northsaw", "#B98FD9",
-        Climate(terrain="crystal forest", min_temperature=-20, max_temperature=2, rainfall="low"),
+        Climate(terrain="crystal forest", min_temperature=-20, max_temperature=2, rainfall="low", plants=["glowcap", "lichen", "nightbloom"]),
     ),
     (
         "w", "Wailing Firth", "Northsaw", "#3A7D3A",
-        Climate(terrain="cold estuary", min_temperature=-6, max_temperature=12, rainfall="torrential"),
+        Climate(terrain="cold estuary", min_temperature=-6, max_temperature=12, rainfall="torrential", plants=["reedgrass", "driftkelp", "moss"]),
     ),
     (
         "k", "Korees", "Kuerigo", "#B0713C",
-        Climate(terrain="mountain", min_temperature=-12, max_temperature=14, rainfall="moderate"),
+        Climate(terrain="mountain", min_temperature=-12, max_temperature=14, rainfall="moderate", plants=["lichen", "thistle", "bitterroot"]),
     ),
     (
         "t", "Trynwyn", "Kuerigo", "#2F3A17",
-        Climate(terrain="mountain valleys", min_temperature=4, max_temperature=18, rainfall="high"),
+        Climate(terrain="mountain valleys", min_temperature=4, max_temperature=18, rainfall="high", plants=["fernshoot", "thistle", "sapbark"]),
     ),
     (
         "v", "Wyldvale", "Kuerigo", "#7B3FC7",
-        Climate(terrain="vale", min_temperature=6, max_temperature=22, rainfall="moderate"),
+        Climate(terrain="vale", min_temperature=6, max_temperature=22, rainfall="moderate", plants=["thistle", "seedpods", "sourberry"]),
     ),
     (
         "l", "Lominasa", "Kuerigo", "#B9CEFF",
-        Climate(terrain="harbour city", min_temperature=2, max_temperature=24, rainfall="moderate"),
+        Climate(terrain="harbour city", min_temperature=2, max_temperature=24, rainfall="moderate", plants=["reedgrass", "driftkelp", "seedpods"]),
     ),
     (
         "r", "Ranatis", "Kuerigo", "#DDD066",
-        Climate(terrain="desert", min_temperature=8, max_temperature=46, rainfall="arid"),
+        Climate(terrain="desert", min_temperature=8, max_temperature=46, rainfall="arid", plants=["bitterroot", "thistle"]),
     ),
     (
         "d", "Doreidrassil", "Kuerigo", "#6A4E8C",
-        Climate(terrain="enchanted forest", min_temperature=8, max_temperature=24, rainfall="high"),
+        Climate(terrain="enchanted forest", min_temperature=8, max_temperature=24, rainfall="high", plants=["glowcap", "nightbloom", "sapbark", "fernshoot"]),
     ),
     (
         "y", "Yoonhye Forest", "Eastern Isles", "#C1571E",
-        Climate(terrain="autumn forest", min_temperature=4, max_temperature=26, rainfall="moderate"),
+        Climate(terrain="autumn forest", min_temperature=4, max_temperature=26, rainfall="moderate", plants=["sapbark", "seedpods", "fernshoot"]),
     ),
     (
         "g", "Tyrglen", "Eastern Isles", "#7A4D2A",
-        Climate(terrain="highland glen", min_temperature=0, max_temperature=18, rainfall="moderate"),
+        Climate(terrain="highland glen", min_temperature=0, max_temperature=18, rainfall="moderate", plants=["thistle", "moss", "reedgrass"]),
     ),
     (
         "m", "Morghaan", "Eastern Isles", "#1E6B1E",
-        Climate(terrain="steppe", min_temperature=-8, max_temperature=24, rainfall="low"),
+        Climate(terrain="steppe", min_temperature=-8, max_temperature=24, rainfall="low", plants=["thistle", "seedpods", "bitterroot"]),
     ),
     (
         "a", "Denn Arctogh", "Eastern Isles", "#EEF2F5",
-        Climate(terrain="snowy valley", min_temperature=-35, max_temperature=-2, rainfall="low"),
+        Climate(terrain="snowy valley", min_temperature=-35, max_temperature=-2, rainfall="low", plants=["lichen", "moss"]),
     ),
     (
         "x", "The Wreck", "Eastern Isles", "#C75225",
-        Climate(terrain="volcanic badlands", min_temperature=14, max_temperature=40, rainfall="arid"),
+        Climate(terrain="volcanic badlands", min_temperature=14, max_temperature=40, rainfall="arid", plants=["bitterroot", "nightbloom"]),
     ),
     (
         "n", "Wylenn", "Eastern Isles", "#45510B",
-        Climate(terrain="woodland", min_temperature=2, max_temperature=20, rainfall="moderate"),
+        Climate(terrain="woodland", min_temperature=2, max_temperature=20, rainfall="moderate", plants=["sapbark", "fernshoot", "sourberry"]),
     ),
     (
         "o", "Gloamwoods", "Eastern Isles", "#141E1F",
-        Climate(terrain="dark forest", min_temperature=0, max_temperature=16, rainfall="high"),
+        Climate(terrain="dark forest", min_temperature=0, max_temperature=16, rainfall="high", plants=["glowcap", "nightbloom", "moss"]),
     ),
     (
         "f", "Stragglefaun", "Eastern Isles", "#CC6600",
-        Climate(terrain="jungle", min_temperature=20, max_temperature=38, rainfall="torrential"),
+        Climate(terrain="jungle", min_temperature=20, max_temperature=38, rainfall="torrential", plants=["fernshoot", "glowcap", "sapbark", "sourberry"]),
     ),
     (
         "z", "Kagotsuma", "Eastern Isles", "#992E2E",
-        Climate(terrain="volcanic coast", min_temperature=16, max_temperature=32, rainfall="high"),
+        Climate(terrain="volcanic coast", min_temperature=16, max_temperature=32, rainfall="high", plants=["driftkelp", "reedgrass", "sourberry"]),
     ),
 ]
 

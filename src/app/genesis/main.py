@@ -76,8 +76,8 @@ async def create_world(seed: int | None = None):
     return {
         "world_id": world.world_id,
         "seed": seed,
-        "regions": len(regions),
-        "species": sum(len(event.species) for event in species_events),
+        "regions": world.regions,
+        "species": world.species,
     }
 
 

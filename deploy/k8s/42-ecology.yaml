@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecology
+  namespace: ecosystem
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: ecology
+  template:
+    metadata:
+      labels:
+        app: ecology
+    spec:
+      containers:
+        - name: ecology
+          image: arathia:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.ecology.main"]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: ecology-database-url
+            - name: AMQP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: amqp-url
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15

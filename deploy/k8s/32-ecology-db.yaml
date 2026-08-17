@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ecology-db
+  namespace: ecosystem
+spec:
+  serviceName: ecology-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecology-db
+  template:
+    metadata:
+      labels:
+        app: ecology-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          args: ["-c", "wal_level=logical"]
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: credentials
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: ecology
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "dev", "-d", "ecology"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecology-db
+  namespace: ecosystem
+spec:
+  clusterIP: None
+  selector:
+    app: ecology-db
+  ports:
+    - port: 5432
+      targetPort: postgres

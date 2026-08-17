@@ -14,6 +14,7 @@ def build_world(width=6, height=4):
     viewer.world["grid"] = [["#00AFAF"] * width for _ in range(height)]
     viewer.world["owners"] = [[None] * width for _ in range(height)]
     viewer.world["order"] = ["wyldvale"]
+    viewer.world["creatures"] = {}
     viewer.world["regions"] = {
         "wyldvale": {
             "name": "Wyldvale",
@@ -22,6 +23,8 @@ def build_world(width=6, height=4):
             "colour": "#5F00AF",
             "celsius": 12.5,
             "weather": {"rain"},
+            "population": None,
+            "occupied": set(),
         }
     }
 
@@ -128,6 +131,8 @@ def test_the_legend_lays_continents_out_in_columns():
         "colour": "#1D46B4",
         "celsius": None,
         "weather": set(),
+        "population": None,
+        "occupied": set(),
     }
     lines = viewer.legend_lines()
     assert any("Chillcap" in line and "Wyldvale" in line for line in lines)
@@ -214,7 +219,7 @@ def test_rain_marks_one_tile_in_five():
     build_world(width=10)
     own_row(0)
     body = render_to_string()
-    assert body.count("\x1b[97m/ ") == 2
+    assert body.count(" \x1b[97m/") == 2
 
 
 def test_rain_falls_one_row_per_frame():
@@ -250,6 +255,82 @@ def test_snow_outranks_wind():
     body = render_to_string()
     assert "*" in body
     assert "~" not in body
+
+
+def census_payload(world_id, herbivores=(), carnivores=(), omnivores=()):
+    return {
+        "world_id": world_id,
+        "region_slug": "wyldvale",
+        "herbivores": list(herbivores),
+        "carnivores": list(carnivores),
+        "omnivores": list(omnivores),
+    }
+
+
+def test_a_census_draws_creatures_and_counts_them():
+    build_world()
+    own_row(0)
+    viewer.apply_event(
+        "ecology.census.wyldvale",
+        census_payload("w1", herbivores=[[0, 0]], carnivores=[[1, 0]]),
+    )
+    body = render_to_string()
+    assert viewer.world["regions"]["wyldvale"]["population"] == 2
+    assert "\x1b[97mo" in body
+    assert "\x1b[91mA" in body
+
+
+def test_a_predator_outranks_prey_sharing_a_tile():
+    build_world()
+    own_row(0)
+    viewer.apply_event(
+        "ecology.census.wyldvale",
+        census_payload("w1", herbivores=[[3, 0]], carnivores=[[3, 0]]),
+    )
+    assert viewer.world["creatures"] == {(3, 0): "c"}
+
+
+def test_a_census_survives_diets_the_relay_left_out():
+    build_world()
+    own_row(0)
+    viewer.apply_event(
+        "ecology.census.wyldvale",
+        {"world_id": "w1", "region_slug": "wyldvale", "herbivores": [[0, 0]]},
+    )
+    assert viewer.world["regions"]["wyldvale"]["population"] == 1
+
+
+def test_the_next_census_replaces_the_last_one():
+    build_world()
+    own_row(0)
+    viewer.apply_event(
+        "ecology.census.wyldvale", census_payload("w1", herbivores=[[0, 0]])
+    )
+    viewer.apply_event(
+        "ecology.census.wyldvale", census_payload("w1", herbivores=[[2, 0]])
+    )
+    assert viewer.world["creatures"] == {(2, 0): "h"}
+
+
+def test_kills_and_extinctions_reach_the_log():
+    build_world()
+    viewer.apply_event(
+        "ecology.creature.died.killed.wyldvale",
+        {
+            "world_id": "w1",
+            "region_slug": "wyldvale",
+            "species": "Glintcrawl",
+            "killed_by": "Siltcreep",
+        },
+    )
+    viewer.apply_event(
+        "ecology.species.extinct.wyldvale",
+        {"world_id": "w1", "region_slug": "wyldvale", "species": "Glintcrawl"},
+    )
+    assert list(viewer.log) == [
+        "day 0 00:00  Siltcreep killed Glintcrawl in Wyldvale",
+        "day 0 00:00  Glintcrawl died out in Wyldvale",
+    ]
 
 
 def test_map_tiles_paint_two_characters_wide():

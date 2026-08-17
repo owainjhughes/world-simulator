@@ -9,7 +9,7 @@ from domain.events import (
     SpeciesProfile,
     WorldCreated,
 )
-from domain.wordbanks import EPITHETS, HABITATS, PLANTS, PREFIXES, SUFFIXES
+from domain.wordbanks import EPITHETS, HABITATS, PREFIXES, SUFFIXES
 
 TRANSPORT_SPEEDS = {"walk": (1.0, 6.0), "swim": (2.0, 8.0), "fly": (5.0, 14.0)}
 
@@ -59,9 +59,9 @@ def generate_species(
         transport = _make_transport(rng, climate)
         low, high = TRANSPORT_SPEEDS[transport]
 
-        min_temperature = climate.min_temperature + rng.uniform(-4, 6)
+        min_temperature = climate.min_temperature + rng.uniform(-6, 1)
         max_temperature = max(
-            climate.max_temperature + rng.uniform(-6, 4), min_temperature + 3
+            climate.max_temperature + rng.uniform(-1, 6), min_temperature + 3
         )
 
         profiles.append(
@@ -74,7 +74,7 @@ def generate_species(
                 max_temperature=round(max_temperature, 1),
                 habitat=rng.choice(HABITATS),
                 food=(
-                    rng.sample(PLANTS, rng.randint(1, 3))
+                    rng.sample(climate.plants, min(len(climate.plants), rng.randint(1, 3)))
                     if diet != "carnivore"
                     else []
                 ),
@@ -85,13 +85,31 @@ def generate_species(
             )
         )
 
-    hunted = [p.name for p in profiles if p.diet != "carnivore"]
-    for profile in profiles:
-        if profile.diet != "herbivore" and hunted:
-            options = [name for name in hunted if name != profile.name]
-            profile.prey = rng.sample(options, min(len(options), rng.randint(1, 3)))
-
     return profiles
+
+
+def wire_food_web(rng: random.Random, profiles: list[SpeciesProfile]) -> None:
+    hunted = [p for p in profiles if p.diet != "carnivore"]
+
+    for profile in profiles:
+        if profile.diet == "herbivore":
+            continue
+        options = [
+            p
+            for p in hunted
+            if p.name != profile.name
+            and p.speed < profile.speed + 2
+            and p.min_temperature <= profile.max_temperature
+            and profile.min_temperature <= p.max_temperature
+        ]
+        neighbours = [p.name for p in options if p.region_id == profile.region_id]
+        elsewhere = [p.name for p in options if p.region_id != profile.region_id]
+
+        wanted = rng.randint(3, 6)
+        profile.prey = rng.sample(neighbours, min(len(neighbours), wanted))
+        profile.prey += rng.sample(
+            elsewhere, min(len(elsewhere), wanted - len(profile.prey))
+        )
 
 
 def generate_world(
@@ -128,5 +146,14 @@ def generate_world(
             )
         )
 
-    world = WorldCreated(world_id=world_id, seed=seed, width=WIDTH, height=HEIGHT)
+    wire_food_web(rng, [p for event in species_events for p in event.species])
+
+    world = WorldCreated(
+        world_id=world_id,
+        seed=seed,
+        width=WIDTH,
+        height=HEIGHT,
+        regions=len(regions),
+        species=sum(len(event.species) for event in species_events),
+    )
     return world, regions, species_events

@@ -17,10 +17,18 @@ AMQP_URL = os.environ.get("AMQP_URL", "amqp://dev:dev@localhost:18801/")
 WORLD_ID = os.environ.get("WORLD_ID")
 REFRESH_SECONDS = 0.5
 RESET = "\x1b[0m"
-COLUMN = 33
+COLUMN = 43
 GLYPHS = {"snow": "*", "rain": "/", "wind": "~"}
+CREATURES = {"h": "\x1b[97mo", "c": "\x1b[91mA", "o": "\x1b[93m&"}
 
-world = {"id": None, "grid": [], "owners": [], "regions": {}, "order": []}
+world = {
+    "id": None,
+    "grid": [],
+    "owners": [],
+    "regions": {},
+    "order": [],
+    "creatures": {},
+}
 now = {"day": 0, "hour": 0, "season": "winter", "night": False}
 log = deque(maxlen=10)
 screen = {"frame": None, "tick": 0}
@@ -78,6 +86,8 @@ async def load_world() -> None:
             "colour": colour,
             "celsius": None,
             "weather": set(),
+            "population": None,
+            "occupied": set(),
         }
         for x, y in region["tiles"]:
             world["grid"][y][x] = colour
@@ -97,10 +107,17 @@ def tile(x: int, y: int) -> str:
     weather = world["regions"][slug]["weather"] if slug else set()
     factor = (1.25 if "sunshine" in weather else 1.0) * (0.55 if now["night"] else 1.0)
     colour = shade(world["grid"][y][x], factor)
+
+    diet = world["creatures"].get((x, y))
     condition = next((c for c in ("snow", "rain", "wind") if c in weather), None)
-    if condition and glyph_visible(condition, x, y, screen["tick"]):
-        return paint(colour, f"\x1b[97m{GLYPHS[condition]} \x1b[39m")
-    return paint(colour, "  ")
+    if condition and not glyph_visible(condition, x, y, screen["tick"]):
+        condition = None
+    if diet is None and condition is None:
+        return paint(colour, "  ")
+
+    creature = CREATURES[diet] if diet else " "
+    falling = f"\x1b[97m{GLYPHS[condition]}" if condition else " "
+    return paint(colour, f"{creature}{falling}\x1b[39m")
 
 
 def cell(colour: str | None, text: str) -> str:
@@ -123,8 +140,16 @@ def continent_cells(continent: str) -> list[str]:
         celsius = (
             "     -" if region["celsius"] is None else f"{region['celsius']:5.1f}C"
         )
+        population = (
+            "    -" if region["population"] is None else f"{region['population']:5d}"
+        )
         weather = " ".join(sorted(region["weather"]))
-        cells.append(cell(region["colour"], f"{region['name']:<16}{celsius} {weather}"))
+        cells.append(
+            cell(
+                region["colour"],
+                f"{region['name']:<16}{celsius}{population} {weather}",
+            )
+        )
     return cells
 
 
@@ -164,11 +189,29 @@ def render() -> None:
     sys.stdout.flush()
 
 
+def take_census(region: dict, payload: dict) -> None:
+    creatures = world["creatures"]
+    for key in region["occupied"]:
+        creatures.pop(key, None)
+
+    occupied = set()
+    population = 0
+    for diet in ("herbivores", "omnivores", "carnivores"):
+        for x, y in payload.get(diet, ()):
+            creatures[(x, y)] = diet[0]
+            occupied.add((x, y))
+            population += 1
+
+    region["occupied"] = occupied
+    region["population"] = population
+
+
 def apply_event(routing_key: str, payload: dict) -> None:
     if payload["world_id"] != world["id"]:
         return
     slug = payload.get("region_slug")
     region = world["regions"].get(slug) if slug else None
+    stamp = f"day {now['day']} {now['hour']:02d}:00"
 
     if routing_key.startswith("clock.temperature.changed"):
         if region:
@@ -176,8 +219,21 @@ def apply_event(routing_key: str, payload: dict) -> None:
         now["day"] = payload["day"]
         now["hour"] = payload["hour"]
         now["season"] = payload["season"]
+    elif routing_key.startswith("ecology.census.") and region:
+        take_census(region, payload)
+    elif routing_key.startswith("ecology.creature.died.killed.") and region:
+        log.append(
+            f"{stamp}  {payload['killed_by']} killed"
+            f" {payload['species']} in {region['name']}"
+        )
+    elif routing_key.startswith("ecology.species.extinct.") and region:
+        log.append(f"{stamp}  {payload['species']} died out in {region['name']}")
+    elif routing_key.startswith("ecology.comfort.stressed.") and region:
+        log.append(
+            f"{stamp}  {payload['species']} is struggling"
+            f" in {region['name']} at {payload['celsius']:.1f}C"
+        )
     elif routing_key.startswith("clock.weather.") and region:
-        stamp = f"day {now['day']} {now['hour']:02d}:00"
         if routing_key.endswith(f".started.{slug}"):
             region["weather"].add(payload["condition"])
             log.append(f"{stamp}  {payload['condition']} started in {region['name']}")
@@ -203,6 +259,7 @@ async def bind_queue() -> aio_pika.abc.AbstractQueue:
     )
     queue = await channel.declare_queue(exclusive=True)
     await queue.bind(exchange, routing_key="clock.#")
+    await queue.bind(exchange, routing_key="ecology.#")
     return queue
 
 

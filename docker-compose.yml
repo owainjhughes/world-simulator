@@ -40,6 +40,20 @@ services:
       interval: 5s
       retries: 12
 
+  ecology-db:
+    image: postgres:17
+    command: postgres -c wal_level=logical
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: ecology
+    ports:
+      - "18806:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d ecology"]
+      interval: 5s
+      retries: 12
+
   genesis:
     build:
       context: .
@@ -82,6 +96,28 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  ecology:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    image: arathia:dev
+    command: python -m app.ecology.main
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dev:dev@ecology-db:5432/ecology
+      AMQP_URL: amqp://dev:dev@rabbitmq/
+    deploy:
+      replicas: 4
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 5s
+      retries: 12
+    depends_on:
+      ecology-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   debezium-genesis:
     image: quay.io/debezium/server:3.6.1.Final
     environment:
@@ -116,4 +152,21 @@ services:
       retries: 24
     depends_on:
       clock:
+        condition: service_healthy
+
+  debezium-ecology:
+    image: quay.io/debezium/server:3.6.1.Final
+    environment:
+      DEBEZIUM_SOURCE_DATABASE_HOSTNAME: ecology-db
+      DEBEZIUM_SOURCE_DATABASE_DBNAME: ecology
+      DEBEZIUM_SOURCE_TOPIC_PREFIX: ecology
+    volumes:
+      - ./deploy/debezium/application.properties:/debezium/config/application.properties:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health"]
+      interval: 5s
+      retries: 24
+    depends_on:
+      ecology:
         condition: service_healthy
