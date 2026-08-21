@@ -4,67 +4,72 @@
 
 ## Overview
 
-```mermaid
-flowchart TB
-    User([You]) -->|POST /worlds| Genesis[Genesis]
-    Genesis ---|owns| GenesisDB[(Genesis DB)]
-    Genesis -->|genesis.* via outbox| Events{{RabbitMQ<br/>world.events}}
-    Events --> ClockQueue[[clock.genesis]]
-    ClockQueue --> Clock[Clock]
-    Clock ---|owns| ClockDB[(Clock DB)]
-    Clock -->|clock.* via outbox| Events
-    Events --> EcologyQueue[[ecology.genesis]]
-    EcologyQueue --> Ecology[Ecology<br/>4 pods, sharded by region]
-    Events -->|clock.temperature.changed.region| Ecology
-    Ecology ---|owns| EcologyDB[(Ecology DB)]
-    Ecology -->|ecology.* via outbox| Events
-    Events -->|clock.* and ecology.*| Viewer[Live viewer]
-    Viewer -.->|world shape| Genesis
+![How Arathia fits together](docs/architecture.svg)
 
-    classDef actor fill:#f7e7c6,stroke:#8d6e3f,color:#342617,stroke-width:2px
-    classDef service fill:#dceedc,stroke:#4f7f58,color:#203d29,stroke-width:2px
-    classDef storage fill:#efe7dd,stroke:#7d6a58,color:#382b1d,stroke-width:2px
-    classDef messaging fill:#dcecf4,stroke:#3b718a,color:#173642,stroke-width:2px
-
-    class User actor
-    class Genesis,Clock,Ecology,Viewer service
-    class GenesisDB,ClockDB,EcologyDB storage
-    class Events,ClockQueue,EcologyQueue messaging
-```
+_Editable source: [`docs/architecture.drawio`](docs/architecture.drawio)._
 
 Arathia is a distributed simulation of a living world, built to learn distributed computing.
 
-A world is generated once: three continents and two island groups carved into nineteen named regions, each populated with its own invented species that have diets, temperature preferences, movement types and a food web. From then on the world runs on its own. Time passes, seasons turn, temperatures rise and fall with the hour and the season, weather comes and goes region by region, and several hundred individual creatures walk, swim and fly around the map hunting, grazing, breeding and dying.
+A world is generated once: three continents and two island groups carved into twenty named regions, each populated with its own invented species that have diets, temperature preferences, movement types and a food web. From then on the world runs on its own. Time passes, seasons turn, temperatures rise and fall with the hour and the season, weather comes and goes region by region, and several hundred individual creatures walk, swim and fly around the map hunting, grazing, breeding and dying.
 
 Nothing in the system calls anything else directly. Each service announces what has happened as events on RabbitMQ, and any service that cares subscribes. Every service owns its own database.
 
 Here is a world Genesis produced, one character per tile, `.` for open sea:
 
 ```
-.................................................LLL............................
-........................JJJJJ...................LLLLL...........................
-.......................JJJJJJJ.................LLLLLLL..........................
-......................JJJJJJJJ.................LLLLLLL..........................
-.......................JJJJJJJ................LLLLLLL...........................
-......................JJJJJJJJJ..............LLLLLLLLL.......AAAAAA.............
-.......................JJJJJJJJJJJ........LLLLLLLLLLLL......AAAAAAAA............
-........................JJJJJJJJJKKKKKKKKKKLLLLLLLLLL........AAAAAAAA...........
-..........................JJJJJJKKKKKKKKKKKKLLLLLLL.........AAAAAAAA............
-...........................JJJKKKKKKKKKKKKKKKKKLLLL........AAABBBBBB............
-.............FFFF.............KKKKKKKKKKKKKK................BBBBBBBBB...........
-..........FFFFFFFFFFF..............KKKKKKK...................CBBBBBBB......N....
-.........FFFFFFFFFFFFFFF...................................CCCCCCCCCC....NNNNN..
-.........HHFFFFFFFGGGGGGGG................................CCCCCCCCC.........NNN.
-.........HHHHHFFGGGGGGGGGGG.........M......................CCCCCCCCC....NNN.NNN.
-........HHHHHHHHGGGGGGGGGGG.......MMMMM......................DDDDCCC............
-.......HHHHHHHHHHGGGGGGGGG........MMMMM.................DDDDDDDDDDDD............
-.......HHHHHHHHHHHIIIIII................................EEDDDDDDDDD.............
-.......HHHHHHHHIIIIIIIIIII................................EEEEEDDD..............
-...........HHIIIIIIIIIIIII...............................EEEEEEEE...............
-...........IIIIIIIIIIII..................................EEEEEEE................
+....................................................................................................
+.................................bbbbbb..............wwwwwww........................................
+...............................bbbbbbbbbb..........wwwwwwwwwwww.....................................
+...............................bbbbbbbbbbbb......wwwwwwwwwwwwwww....................................
+..............................bbbbbbbbbbbbcccccccwwwwwwwwwwwwwww....................................
+..............................bbbbbbbbbbbbccccccccwwwwwwwwwwwwww....................................
+..............................bbbbbbbbbbbcccccccccwwwwwwwwwwwwwww...................................
+...............................bbbbbbbbbbccssssssccwwwwwwwwwwwwww...................................
+.................................bbbbbbbcccsssssscccwwwwwwwwwwww....................................
+...................................bbbbbccccssscccccwwwwwwwwwww.....................................
+....................................bbbbcccccccccccccwwwwwwwww......................................
+............................................cccccccccwwwww..........................................
+....................................................................................................
+....................................................................................................
+....................................................................................................
+...................................ddd..............................................................
+..................................ddddd...........................................y.................
+..................................ddddd..........................................yyyy...............
+..................................ddddd........................................yyyyyyy..............
+...................................ddd.........................................yyyyyyyy.............
+..................kkkk.......................................................yyyyyyyyyy.............
+...............kkkkkkkkkk..................................................yyyyyyyyyggg.............
+..............kkkkkkkkkkttt...............................................yyyyyyyyygggg.............
+..............kkkkkkkkktttt.............................................yyyyyyyyygggggg.............
+.............kkkkkkkkktttttt...........................................yyyyyyyyyygggggg.............
+............kkkkkkkktttttttt..........................................yyyyyyyyyyygggggg.............
+...........kkkkkkkkttttttttt..........................................yyyyyymmmmmmmmmmm.............
+...........kkkkkkttttttttttt.........................................yyyyyymmmmmmmmmmmm.............
+...........kkkkktttttttttttt..........................................yyyy.mmmmmmmmmmm..............
+..........vvvvvvvvvvvvvtttt...........................................yyy.....mmmmmmmm..............
+..........vvvvvvvvvvvvvvvv....................................................mmmmmmm...............
+..........vvvvvvvvvvvvvvv.................................................aaaaaaxxxxxx..............
+.........vvvvvvvvvvvvvvvv................................................aaaaaaxxxxxxxx.............
+.........rrrrvvvvvvvvvvv.................................................aaaaaaxxxxxxxx.............
+........rrrrrrrrrrrrrlll................................................aaaaaaaxxxxxxx..............
+........rrrrrrrrrrrrrlll................................................aaaaaaaaxxxxxx..............
+........rrrrrrrrrrrrrrr.................................................aaaaaaaaxxxxxx..............
+........rrrrrrrrrrrrrrr..................................................nnnnnnnnnnxx...............
+........rrrrrrrrrrrrrrr.................................................nnnnnnnnnnnnn...............
+.........rrrrrrrrrrrrrr................................................oonnnnnnnnnnn................
+.........rrrrrrrrrrrrrrr...............................................ooooooooooo...........zzzz...
+.....rrrrrrrrrrrrrrrrrrr................................................ooooooooo..........zzzzzz...
+...ppp.....rrrrrrrrrrrrr..................................................fffffff.........zz...zz...
+...pp.......rrrrrrrrrrr..................................................fffffff...............zz...
+....pppp.....rrrrrrrrrr..................................................ffffff...............zzz...
+.................rrrrrr..................................................f..................zzz.....
+............................................................................................zz......
+............................................................................................z.......
+....................................................................................................
+....................................................................................................
 ```
 
-Roughly 28% of the map is land. The continent outlines and the position of every region are fixed, so the world is recognisable every time — but the coastline and the borders are generated with noise that shifts each run, so no two worlds are identical.
+Roughly 21% of the map is land. The coastline and the region borders are fixed, so every world is drawn from the same map and Arathia is recognisable every time. What the seed changes is the life on it: the species, their traits and the food web wiring them together are rolled fresh each run, so no two worlds behave the same.
 
 Ocean is simply any tile no region owns, which makes water a real barrier: something that walks cannot cross it, something that swims can, and something that flies does not care.
 
@@ -76,7 +81,7 @@ Here is the original painted map that the world creation is based off of:
 
 ## Features
 
-- Procedural world generation: nineteen regions across three continents and two island groups, each with its own climate, rainfall and plant life
+- Procedural world generation: twenty regions across three continents and two island groups, each with its own climate, rainfall and plant life
 - Invented species per region, named from word banks, with randomised traits and a predator/prey food web wired by climate, diet and running speed
 - A world clock with day/night, four seasons, and temperature that follows both the hour and the time of year
 - Per-region weather, where snow rather than rain falls if the region is below freezing
@@ -92,7 +97,7 @@ Here is the original painted map that the world creation is based off of:
 
 - [Docker](https://www.docker.com/products/docker-desktop/)
 - [uv](https://docs.astral.sh/uv/) — only if you want to run the services outside containers
-- [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/) and [Skaffold](https://skaffold.dev/) — only for the Kubernetes route
+- [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/), [Helm](https://helm.sh/) and [Skaffold](https://skaffold.dev/), only for the Kubernetes route
 
 Or skip installing any of that: the repo has a [dev container](.devcontainer/devcontainer.json) with the whole toolchain inside, Docker included. Open the folder in VS Code and "Reopen in Container" (or open it in GitHub Codespaces), and both the Compose and Kind routes below work as-is inside it.
 
@@ -136,52 +141,68 @@ ecology-3  | holding 5 regions: gloamwoods kagotsuma korees lominasa stragglefau
 
 ### 🛞 Create a cluster
 
-The cluster config is in [deploy/kind-cluster.yaml](deploy/kind-cluster.yaml). It creates one control plane and two workers, and maps two ports out to your machine so you can reach the API and the RabbitMQ dashboard.
+The cluster config is in [deploy/kind-cluster.yaml](deploy/kind-cluster.yaml). It creates one control plane and two workers, maps four ports out to your machine so you can reach the services and the RabbitMQ dashboard, and pins the Kubernetes API to port 6443.
+
+_Run in the root of this repo:_
 
 ```sh
-kind create cluster --config deploy/kind-cluster.yaml
+make create-cluster
 ```
 
-### 🔑 Create the credentials file
+`make clean-cluster` deletes it again.
 
-> [!IMPORTANT]
-> `deploy/k8s/10-credentials.yaml` is deliberately **not** committed, because it holds passwords. You need to create it yourself before deploying.
-
-_Save this as `deploy/k8s/10-credentials.yaml`:_
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: credentials
-  namespace: ecosystem
-type: Opaque
-stringData:
-  postgres-user: dev
-  postgres-password: dev
-  rabbitmq-user: dev
-  rabbitmq-password: dev
-  amqp-url: amqp://dev:dev@rabbitmq:5672/
-  genesis-database-url: postgresql+asyncpg://dev:dev@genesis-db:5432/genesis
-  clock-database-url: postgresql+asyncpg://dev:dev@clock-db:5432/clock
-  ecology-database-url: postgresql+asyncpg://dev:dev@ecology-db:5432/ecology
-```
+> [!NOTE]
+> The API port is pinned on purpose. Left alone, kind picks a random loopback port, and Docker Desktop drops that binding when it restarts, which leaves your kubeconfig aimed at a port nothing is listening on and every `kubectl` call failing. Pinning it means a recreated cluster always lands in the same place.
 
 ### 🚀 Build, load and deploy
 
-Kind cannot pull images built on your machine, so every deploy means: build the image, load it into the cluster, apply the manifests, wait for the rollout. That loop used to be hand-rolled in the Makefile; it is now owned by [Skaffold](https://skaffold.dev/), which does all four steps (and knows it is talking to Kind, so it loads images directly instead of pushing to a registry):
+Kind cannot pull images built on your machine, so every deploy means four steps: build the image, load it into the cluster, install the chart, wait for the rollout. The Makefile exposes each step on its own, and `deploy-local` runs all four in order.
 
 ```sh
-make deploy
+make deploy-local
 ```
 
-For actual development there is a better mode. This watches your files, and on every save rebuilds the image, redeploys, and tails the pod logs until you Ctrl+C:
+For actual development there is a better mode. [Skaffold](https://skaffold.dev/) watches your files, and on every save rebuilds the image, redeploys the chart, and tails the pod logs until you Ctrl+C:
 
 ```sh
-make kind-dev
+make dev
 ```
 
-The config is [skaffold.yaml](skaffold.yaml): one artifact built from the same Dockerfile Compose uses, deployed with kubectl from `deploy/k8s/`. Each build gets a unique tag, which is what makes the Deployments roll on their own, no restart needed.
+> [!IMPORTANT]
+> `make dev` does not currently work on Windows with Helm 4. Skaffold installs a render plugin into Helm by creating a symlink, and Windows refuses that without elevation. Skaffold [issue #9988](https://github.com/GoogleContainerTools/skaffold/issues/9988) tracks it and the fix in [PR #10108](https://github.com/GoogleContainerTools/skaffold/pull/10108) is not merged yet, so upgrading Skaffold does not help. Installing Helm 3.x instead is the known workaround. Everything else, including `make deploy-local`, works fine on Helm 4.
+
+The config is [skaffold.yaml](skaffold.yaml): one artifact built from the same Dockerfile Compose uses, deployed through the Helm chart rather than raw manifests. Each build gets a unique tag, which is what makes the Deployments roll on their own, no restart needed.
+
+### ⎈ The chart
+
+Everything that runs in the cluster comes from one chart in [deploy/helm/arathia](deploy/helm/arathia). It has no dependencies. The Postgres StatefulSets, the RabbitMQ Deployment and the Debezium relays are all written out here rather than pulled in from someone else's chart, because seeing them is the point of the exercise.
+
+Six templates, three of which are loops rather than one file per service:
+
+| Template | What it makes |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `postgres.yaml` | One StatefulSet and one headless Service per entry in `databases` |
+| `debezium.yaml` | One relay Deployment per entry in `databases` |
+| `services.yaml` | One Deployment per entry in `services`, plus a NodePort Service where one is asked for |
+| `rabbitmq.yaml` | The broker and its two NodePorts |
+| `secret.yaml` | Credentials, with every connection URL derived rather than written out |
+| `debezium-config.yaml` | The relay config all three relays share |
+
+`databases` is nothing more than a list of three names, and the rest falls out of it: the relay for `clock` knows to read `clock-db` and publish under the `clock.` prefix without any of that being stated anywhere. The services genuinely do differ, so `services` carries the real differences per entry, which is what starts it, how many replicas, whether it needs the broker, and whether it gets a NodePort.
+
+The Secret is worth a note. It used to be a file you wrote by hand, and it stated the credentials five times over: once as a user and password, then again inside each of the four connection URLs. Change the password and four of the five went stale without a word. The chart derives all four, so they cannot drift:
+
+```sh
+helm template deploy/helm/arathia --set credentials.postgresPassword=hunter2
+```
+
+To see exactly what the chart produces before any of it reaches the cluster:
+
+```sh
+make render-helm
+```
+
+That writes `deploy/helm/render.yaml` and opens it. It is the fastest way to find out why a template is not doing what you thought.
 
 > [!TIP]
 > There is only one image. Genesis, Clock and Ecology are the same codebase started with different commands, which each Deployment sets for itself.
@@ -205,7 +226,7 @@ kubectl logs -n ecosystem deployment/clock -f
 Or let one command do the whole thing — deploy, wait for the rollout, create a world if none exists, and open the viewer:
 
 ```sh
-make k8s-run
+make run-kind
 ```
 
 ### 🌍🌍 Running more than one world
@@ -213,11 +234,11 @@ make k8s-run
 Each clock pod runs exactly one world, so the number of clock replicas is the number of worlds actually running. Create a second world, scale the clock, and watch the new pod claim it:
 
 ```sh
-make k8s-world
+make world-kind
 kubectl scale deployment/clock -n ecosystem --replicas=2
 ```
 
-`make k8s-viewer` opens the world menu against the cluster, where you can see which pod-run worlds are ticking, view one, or create and delete them.
+`make viewer-kind` opens the world menu against the cluster, where you can see which pod-run worlds are ticking, view one, or create and delete them.
 
 ### 🧬 Watching Ecology resplit the map
 
@@ -278,7 +299,7 @@ The key is grouped by continent and runs north to south, with each island group 
      with the creatures         Boring Tundra   -14.4C   43
      moving across it and       Wailing Firth     0.3C  320 snow sunshine
      ocean in between]          Shard Forest    -12.9C   17
-                                Chillcap        -29.5C   33 snow sunshine
+                                Chillcap Peaks  -29.5C   33 snow sunshine
 
                               Kuerigo
                                 Doreidrassil     12.3C   36 rain
@@ -480,53 +501,9 @@ No service publishes to RabbitMQ directly, because writing to the database and t
 
 The same architecture is easier to follow as a sequence. This is the path from creating a world to watching its live weather updates:
 
-```mermaid
-sequenceDiagram
-    actor User as You
-    box World creation
-    participant Genesis
-    participant GenesisDB as Genesis DB
-    participant GenesisRelay as Debezium
-    end
-    box Event backbone
-    participant Events as RabbitMQ
-    end
-    box Simulation
-    participant Clock
-    participant ClockDB as Clock DB
-    participant ClockRelay as Debezium
-    end
-    box Life
-    participant Ecology
-    participant EcologyDB as Ecology DB
-    participant EcologyRelay as Debezium
-    end
-    box Observation
-    participant Viewer as Live viewer
-    end
+![A world on the wire](docs/sequence.svg)
 
-    User->>Genesis: POST /worlds
-    Genesis->>GenesisDB: Store world + outbox events
-    GenesisDB-->>GenesisRelay: Stream WAL changes
-    GenesisRelay->>Events: Publish genesis.*
-    Events->>Clock: Deliver through clock.genesis
-    Clock->>ClockDB: Register the world
-    Events->>Ecology: Deliver through ecology.genesis
-    Ecology->>EcologyDB: Store regions, species, then seed creatures
-    Viewer->>Genesis: GET /worlds/{id}/regions
-    Genesis-->>Viewer: Return world shape
-
-    loop Every simulated hour
-        Clock->>ClockDB: Store tick + outbox events
-        ClockDB-->>ClockRelay: Stream WAL changes
-        ClockRelay->>Events: Publish clock.*
-        Events->>Ecology: Deliver this region's temperature
-        Ecology->>EcologyDB: Move, feed, breed, kill + outbox events
-        EcologyDB-->>EcologyRelay: Stream WAL changes
-        EcologyRelay->>Events: Publish ecology.*
-        Events-->>Viewer: Deliver live updates
-    end
-```
+_Editable source: [`docs/sequence.drawio`](docs/sequence.drawio)._
 
 | Event                | Routing key                                    | Published by |
 | -------------------- | ---------------------------------------------- | ------------ |
@@ -574,7 +551,7 @@ Ecology leases the same way but at a finer grain: the unit is one region of one 
 - **[RabbitMQ](https://www.rabbitmq.com/)**
 - **[PostgreSQL](https://www.postgresql.org/)**
 - **[Debezium Server](https://debezium.io/)**
-- **[Docker Compose](https://docs.docker.com/compose/) and [Kind](https://kind.sigs.k8s.io/).**
+- **[Docker Compose](https://docs.docker.com/compose/), [Kind](https://kind.sigs.k8s.io/) and [Helm](https://helm.sh/).**
 
 # Development
 
@@ -613,7 +590,7 @@ The **unit tests** cover the `domain/` layer, which is all pure functions: that 
 
 Ecology is the biggest beneficiary of keeping the rules free of I/O. An hour of life is a function from creatures, vegetation and a temperature to a new set of creatures, so the tests can state things directly: that a creature with nothing to eat starves, that cold builds up until it kills and warmth undoes it, that a predator closes in while its prey runs, that a fed and settled pair breeds while a lone creature does not, that swimmers can leave the coast and walkers cannot, and that the last of a species dying is announced.
 
-The **end-to-end tests** need `make up` first, and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker to confirm every creation event is published, confirm that exactly one world is emitting temperature readings covering all nineteen regions, and wait for a census from every region with creatures in it. Two of them bind a queue to a single region's routing key, one for Clock and one for Ecology, and assert nothing from anywhere else arrives.
+The **end-to-end tests** need `make up` first, and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker to confirm every creation event is published, confirm that exactly one world is emitting temperature readings covering all twenty regions, and wait for a census from every region with creatures in it. Two of them bind a queue to a single region's routing key, one for Clock and one for Ecology, and assert nothing from anywhere else arrives.
 
 > [!NOTE]
 > The end-to-end tests create real worlds and assume a single clock replica: only one world ever runs, and the extras stay registered but unclaimed and silent. Run them before scaling the clock up, and run `docker compose down -v` if you want to start from an empty slate.
@@ -629,7 +606,6 @@ This is a work in progress and there is plenty I know is missing or wrong.
 - **A world whose creation events go missing never comes alive.** Ecology waits for every region and species before it seeds, which is right, but if a message is genuinely lost the world sits there empty with no way to ask Genesis to say it all again. A replay endpoint, or seeding from an HTTP read of Genesis after a timeout, would close that hole.
 - **Ecology's tuning is hand-picked.** Lifespans, hunger rates, regrowth and how much a predator eats are constants chosen by watching populations rise and fall until they stopped collapsing. They are plausible rather than derived, and a different set would give a different-feeling world.
 - **No observability.** The plan is OpenTelemetry with SigNoz, so a single world creation can be traced across all three services.
-- **Raw YAML instead of a Helm chart.** Fine for one environment, but the services are nearly identical, so one templated chart would replace most of `deploy/k8s/`.
 - **The viewer is a terminal program.** A browser-based map, driven by an Observation service that keeps a read model of the world, is the proper version of this.
 - **Hand-written database manifests.** Real clusters use operators — CloudNativePG for Postgres, the RabbitMQ Cluster Operator for the broker — which handle clustering, failover and backups. Writing the StatefulSets by hand was worth doing once to understand them, but it is not what you would run.
 - **NodePorts instead of an Ingress.** Fine for Kind, not for anything real.

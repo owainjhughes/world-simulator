@@ -1,22 +1,23 @@
+{{- range .Values.databases }}
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: clock-db
-  namespace: ecosystem
+  name: {{ . }}-db
 spec:
-  serviceName: clock-db
+  serviceName: {{ . }}-db
   replicas: 1
   selector:
     matchLabels:
-      app: clock-db
+      app: {{ . }}-db
   template:
     metadata:
       labels:
-        app: clock-db
+        app: {{ . }}-db
     spec:
       containers:
         - name: postgres
-          image: postgres:17
+          image: {{ $.Values.postgres.image }}
           args: ["-c", "wal_level=logical"]
           ports:
             - name: postgres
@@ -33,7 +34,7 @@ spec:
                   name: credentials
                   key: postgres-password
             - name: POSTGRES_DB
-              value: clock
+              value: {{ . }}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           volumeMounts:
@@ -41,7 +42,7 @@ spec:
               mountPath: /var/lib/postgresql/data
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "dev", "-d", "clock"]
+              command: ["pg_isready", "-U", {{ $.Values.credentials.postgresUser | quote }}, "-d", {{ . | quote }}]
             initialDelaySeconds: 5
             periodSeconds: 5
   volumeClaimTemplates:
@@ -51,17 +52,17 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 1Gi
+            storage: {{ $.Values.postgres.storage }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: clock-db
-  namespace: ecosystem
+  name: {{ . }}-db
 spec:
   clusterIP: None
   selector:
-    app: clock-db
+    app: {{ . }}-db
   ports:
     - port: 5432
       targetPort: postgres
+{{- end }}

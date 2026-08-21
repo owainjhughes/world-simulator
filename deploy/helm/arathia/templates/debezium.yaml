@@ -1,31 +1,32 @@
+{{- range .Values.databases }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: debezium-clock
-  namespace: ecosystem
+  name: debezium-{{ . }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: debezium-clock
+      app: debezium-{{ . }}
   template:
     metadata:
       labels:
-        app: debezium-clock
+        app: debezium-{{ . }}
     spec:
       containers:
         - name: debezium
-          image: quay.io/debezium/server:3.6.1.Final
+          image: {{ $.Values.debezium.image }}
           ports:
             - name: http
               containerPort: 8080
           env:
             - name: DEBEZIUM_SOURCE_DATABASE_HOSTNAME
-              value: clock-db
+              value: {{ . }}-db
             - name: DEBEZIUM_SOURCE_DATABASE_DBNAME
-              value: clock
+              value: {{ . }}
             - name: DEBEZIUM_SOURCE_TOPIC_PREFIX
-              value: clock
+              value: {{ . }}
             - name: DEBEZIUM_SOURCE_DATABASE_USER
               valueFrom:
                 secretKeyRef:
@@ -65,3 +66,4 @@ spec:
         - name: config
           configMap:
             name: debezium
+{{- end }}

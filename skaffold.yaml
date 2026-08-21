@@ -9,8 +9,14 @@ build:
         dockerfile: deploy/docker/Dockerfile
   local:
     push: false
-manifests:
-  rawYaml:
-    - deploy/k8s/*.yaml
 deploy:
-  kubectl: {}
+  helm:
+    releases:
+      - name: arathia
+        chartPath: deploy/helm/arathia
+        namespace: ecosystem
+        createNamespace: true
+        setValueTemplates:
+          image: "{{.IMAGE_FULLY_QUALIFIED_arathia}}"
+  statusCheckDeadlineSeconds: 600
+  tolerateFailuresUntilDeadline: true

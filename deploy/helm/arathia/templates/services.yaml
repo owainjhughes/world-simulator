@@ -1,23 +1,28 @@
+{{- range .Values.services }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ecology
-  namespace: ecosystem
+  name: {{ .name }}
 spec:
-  replicas: 4
+  replicas: {{ .replicas }}
+  {{- if .strategy }}
+  strategy:
+    type: {{ .strategy }}
+  {{- end }}
   selector:
     matchLabels:
-      app: ecology
+      app: {{ .name }}
   template:
     metadata:
       labels:
-        app: ecology
+        app: {{ .name }}
     spec:
       containers:
-        - name: ecology
-          image: arathia:dev
+        - name: {{ .name }}
+          image: {{ $.Values.image }}
           imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.ecology.main"]
+          command: {{ .command | toJson }}
           ports:
             - name: http
               containerPort: 8000
@@ -26,12 +31,18 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: credentials
-                  key: ecology-database-url
+                  key: {{ .name }}-database-url
+            {{- if .amqp }}
             - name: AMQP_URL
               valueFrom:
                 secretKeyRef:
                   name: credentials
                   key: amqp-url
+            {{- end }}
+            {{- range $key, $value := .env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health
@@ -44,3 +55,19 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+{{- if .nodePort }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+spec:
+  type: NodePort
+  selector:
+    app: {{ .name }}
+  ports:
+    - port: 8000
+      targetPort: http
+      nodePort: {{ .nodePort }}
+{{- end }}
+{{- end }}

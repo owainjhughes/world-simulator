@@ -1,0 +1,121 @@
+<mxfile>
+  <diagram id="seqlayout" name="A world on the wire">
+    <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2420" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="band0" value="World creation" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;verticalAlign=top;fontStyle=1;fontSize=14;fontColor=#5A6C86;spacingTop=6;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="215" y="44" width="550" height="1086" as="geometry"/>
+        </mxCell>
+        <mxCell id="band1" value="Event backbone" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#FF6600;verticalAlign=top;fontStyle=1;fontSize=14;fontColor=#5A6C86;spacingTop=6;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="815" y="44" width="150" height="1086" as="geometry"/>
+        </mxCell>
+        <mxCell id="band2" value="Simulation" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;verticalAlign=top;fontStyle=1;fontSize=14;fontColor=#5A6C86;spacingTop=6;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="44" width="550" height="1086" as="geometry"/>
+        </mxCell>
+        <mxCell id="band3" value="Life" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;verticalAlign=top;fontStyle=1;fontSize=14;fontColor=#5A6C86;spacingTop=6;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="1615" y="44" width="550" height="1086" as="geometry"/>
+        </mxCell>
+        <mxCell id="band4" value="Observation" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C86;verticalAlign=top;fontStyle=1;fontSize=14;fontColor=#5A6C86;spacingTop=6;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="2215" y="44" width="150" height="1086" as="geometry"/>
+        </mxCell>
+        <mxCell id="you" value="You" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;participant=umlActor;verticalAlign=bottom;spacingBottom=-14;labelBackgroundColor=#ffffff;fillColor=#FA6800;strokeColor=#C73500;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="genesis" value="Genesis" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#3776AB;strokeColor=#2B5D82;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="genesisdb" value="Genesis DB" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#4169E1;strokeColor=#2F4CB0;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="genesisrelay" value="Debezium" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#5A6C86;strokeColor=#415063;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="rabbit" value="RabbitMQ" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#FF6600;strokeColor=#C74F00;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="clock" value="Clock" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#3776AB;strokeColor=#2B5D82;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="clockdb" value="Clock DB" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#4169E1;strokeColor=#2F4CB0;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="clockrelay" value="Debezium" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#5A6C86;strokeColor=#415063;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecology" value="Ecology" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#3776AB;strokeColor=#2B5D82;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecologydb" value="Ecology DB" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#4169E1;strokeColor=#2F4CB0;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1840" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecologyrelay" value="Debezium" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#5A6C86;strokeColor=#415063;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="2040" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="viewer" value="Live viewer" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;size=40;fillColor=#3776AB;strokeColor=#2B5D82;fontColor=#FFFFFF;strokeWidth=2;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="2240" y="100" width="100" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="m0" value="POST /worlds" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.0874;entryX=0.5;entryY=0.0874;" edge="1" parent="1" source="you" target="genesis">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m1" value="Store world + outbox events" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.1359;entryX=0.5;entryY=0.1359;" edge="1" parent="1" source="genesis" target="genesisdb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m2" value="Stream WAL changes" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;exitX=0.5;exitY=0.1845;entryX=0.5;entryY=0.1845;" edge="1" parent="1" source="genesisdb" target="genesisrelay">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m3" value="Publish genesis.*" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.233;entryX=0.5;entryY=0.233;" edge="1" parent="1" source="genesisrelay" target="rabbit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m4" value="Deliver through clock.genesis" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.2816;entryX=0.5;entryY=0.2816;" edge="1" parent="1" source="rabbit" target="clock">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m5" value="Register the world" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.3301;entryX=0.5;entryY=0.3301;" edge="1" parent="1" source="clock" target="clockdb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m6" value="Deliver through ecology.genesis" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.3786;entryX=0.5;entryY=0.3786;" edge="1" parent="1" source="rabbit" target="ecology">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m7" value="Store regions, species, then seed creatures" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.4272;entryX=0.5;entryY=0.4272;" edge="1" parent="1" source="ecology" target="ecologydb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m8" value="GET /worlds/{id}/regions" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.4757;entryX=0.5;entryY=0.4757;" edge="1" parent="1" source="viewer" target="genesis">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m9" value="Return world shape" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;strokeColor=#999999;fontColor=#999999;exitX=0.5;exitY=0.5243;entryX=0.5;entryY=0.5243;" edge="1" parent="1" source="genesis" target="viewer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m10" value="Store tick + outbox events" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.5728;entryX=0.5;entryY=0.5728;" edge="1" parent="1" source="clock" target="clockdb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m11" value="Stream WAL changes" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;exitX=0.5;exitY=0.6214;entryX=0.5;entryY=0.6214;" edge="1" parent="1" source="clockdb" target="clockrelay">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m12" value="Publish clock.*" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.6699;entryX=0.5;entryY=0.6699;" edge="1" parent="1" source="clockrelay" target="rabbit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m13" value="Deliver this region's temperature" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.7184;entryX=0.5;entryY=0.7184;" edge="1" parent="1" source="rabbit" target="ecology">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m14" value="Move, feed, breed, kill + outbox events" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.767;entryX=0.5;entryY=0.767;" edge="1" parent="1" source="ecology" target="ecologydb">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m15" value="Stream WAL changes" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;exitX=0.5;exitY=0.8155;entryX=0.5;entryY=0.8155;" edge="1" parent="1" source="ecologydb" target="ecologyrelay">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m16" value="Publish ecology.*" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;exitX=0.5;exitY=0.8641;entryX=0.5;entryY=0.8641;" edge="1" parent="1" source="ecologyrelay" target="rabbit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="m17" value="Deliver live updates" style="fontSize=15;html=1;verticalAlign=bottom;endArrow=open;dashed=1;curved=0;rounded=0;exitX=0.5;exitY=0.9126;entryX=0.5;entryY=0.9126;" edge="1" parent="1" source="rabbit" target="viewer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopframe" value="loop" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;fillColor=none;strokeColor=#3b718a;fontColor=#173642;fontSize=14;fontStyle=1;width=76;height=28;" vertex="1" parent="1">
+          <mxGeometry x="815" y="645" width="1550" height="420" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopcond" value="[ every simulated hour ]" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontColor=#173642;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="899" y="645" width="220" height="28" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
