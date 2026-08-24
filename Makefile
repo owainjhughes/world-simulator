@@ -1,7 +1,7 @@
 CLUSTER := ecosystem
 NAMESPACE := ecosystem
 RELEASE := arathia
-CHART := deploy/helm/arathia
+CHART := chart
 IMAGE := arathia:dev
 
 GENESIS_URL ?= http://localhost:18800
@@ -88,7 +88,7 @@ deploy-local: build-docker load-docker deploy-helm
 
 # Render the chart to a file and open it, which is the quickest way to debug a template
 render-helm:
-	helm template $(RELEASE) $(CHART) --namespace $(NAMESPACE) > deploy/helm/render.yaml && code deploy/helm/render.yaml
+	helm template $(RELEASE) $(CHART) --namespace $(NAMESPACE) > chart/render.yaml && code chart/render.yaml
 
 # Watch the source and redeploy on every save
 dev:

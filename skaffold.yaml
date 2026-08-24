@@ -13,7 +13,7 @@ deploy:
   helm:
     releases:
       - name: arathia
-        chartPath: deploy/helm/arathia
+        chartPath: chart
         namespace: ecosystem
         createNamespace: true
         setValueTemplates:

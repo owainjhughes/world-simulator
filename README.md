@@ -152,7 +152,7 @@ make create-cluster
 `make clean-cluster` deletes it again.
 
 > [!NOTE]
-> The API port is pinned on purpose. Left alone, kind picks a random loopback port, and Docker Desktop drops that binding when it restarts, which leaves your kubeconfig aimed at a port nothing is listening on and every `kubectl` call failing. Pinning it means a recreated cluster always lands in the same place.
+> The API port is pinned on purpose. Left alone, kind picks a random loopback port, and Docker Desktop drops that binding when it restarts, so every `kubectl` call then fails against a stale kubeconfig.
 
 ### 🚀 Build, load and deploy
 
@@ -169,40 +169,30 @@ make dev
 ```
 
 > [!IMPORTANT]
-> `make dev` does not currently work on Windows with Helm 4. Skaffold installs a render plugin into Helm by creating a symlink, and Windows refuses that without elevation. Skaffold [issue #9988](https://github.com/GoogleContainerTools/skaffold/issues/9988) tracks it and the fix in [PR #10108](https://github.com/GoogleContainerTools/skaffold/pull/10108) is not merged yet, so upgrading Skaffold does not help. Installing Helm 3.x instead is the known workaround. Everything else, including `make deploy-local`, works fine on Helm 4.
+> `make dev` does not work on Windows with Helm 4. Skaffold installs a plugin into Helm by creating a symlink, which Windows refuses without elevation ([issue #9988](https://github.com/GoogleContainerTools/skaffold/issues/9988), fix unmerged). Install Helm 3.x if you want it. Everything else works fine on Helm 4.
 
 The config is [skaffold.yaml](skaffold.yaml): one artifact built from the same Dockerfile Compose uses, deployed through the Helm chart rather than raw manifests. Each build gets a unique tag, which is what makes the Deployments roll on their own, no restart needed.
 
 ### ⎈ The chart
 
-Everything that runs in the cluster comes from one chart in [deploy/helm/arathia](deploy/helm/arathia). It has no dependencies. The Postgres StatefulSets, the RabbitMQ Deployment and the Debezium relays are all written out here rather than pulled in from someone else's chart, because seeing them is the point of the exercise.
+Everything in the cluster comes from one chart in [chart](chart), with no dependencies. The Postgres StatefulSets, the RabbitMQ Deployment and the Debezium relays are written out here rather than pulled in from someone else's chart, because seeing them is the point.
 
-Six templates, three of which are loops rather than one file per service:
+Three of the six templates are loops rather than a file per service:
 
 | Template | What it makes |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| `postgres.yaml` | One StatefulSet and one headless Service per entry in `databases` |
-| `debezium.yaml` | One relay Deployment per entry in `databases` |
-| `services.yaml` | One Deployment per entry in `services`, plus a NodePort Service where one is asked for |
+| ---------------------- | ------------------------------------------------------------------- |
+| `postgres.yaml` | A StatefulSet and headless Service per entry in `databases` |
+| `debezium.yaml` | A relay Deployment per entry in `databases` |
+| `services.yaml` | A Deployment per entry in `services`, plus a NodePort where asked for |
 | `rabbitmq.yaml` | The broker and its two NodePorts |
-| `secret.yaml` | Credentials, with every connection URL derived rather than written out |
-| `debezium-config.yaml` | The relay config all three relays share |
+| `secret.yaml` | Credentials, with every connection URL derived |
+| `debezium-config.yaml` | The relay config all three share |
 
-`databases` is nothing more than a list of three names, and the rest falls out of it: the relay for `clock` knows to read `clock-db` and publish under the `clock.` prefix without any of that being stated anywhere. The services genuinely do differ, so `services` carries the real differences per entry, which is what starts it, how many replicas, whether it needs the broker, and whether it gets a NodePort.
+`databases` is just a list of three names, and the rest falls out of it: the relay for `clock` reads `clock-db` and publishes under the `clock.` prefix without any of that being written down. The services really do differ, so `services` carries what starts each one, its replica count, whether it needs the broker, and whether it gets a NodePort.
 
-The Secret is worth a note. It used to be a file you wrote by hand, and it stated the credentials five times over: once as a user and password, then again inside each of the four connection URLs. Change the password and four of the five went stale without a word. The chart derives all four, so they cannot drift:
+The Secret used to be a file you wrote by hand, stating the credentials five times over: once as a user and password, then again inside each of the four connection URLs. Change the password and four of them went stale without a word. The chart derives them now, so they cannot drift.
 
-```sh
-helm template deploy/helm/arathia --set credentials.postgresPassword=hunter2
-```
-
-To see exactly what the chart produces before any of it reaches the cluster:
-
-```sh
-make render-helm
-```
-
-That writes `deploy/helm/render.yaml` and opens it. It is the fastest way to find out why a template is not doing what you thought.
+`make render-helm` writes `chart/render.yaml` and opens it, which is the quickest way to see what a template actually produces.
 
 > [!TIP]
 > There is only one image. Genesis, Clock and Ecology are the same codebase started with different commands, which each Deployment sets for itself.
@@ -400,13 +390,13 @@ It has no loop of its own. The Clock already announces the temperature in every 
 
 Because breeding needs a *pair* who happen to meet, a species scattered too thinly cannot recover even when conditions are perfect, which is what makes extinction stick.
 
-**How many creatures a region gets** is not a number anyone picked. It falls out of the food supply: a region's carrying capacity is its land area multiplied by how fast its vegetation regrows, which comes from its rainfall. Torrential Wailing Firth supports hundreds; arid Ranatis, despite being the largest region on the map, supports a few dozen. Species settle where the climate suits them year-round and at least one of their food plants grows, so most live where they were generated and a hardy few spread into neighbouring regions that look like home. Predators only settle where their prey actually live, and only as many as that prey base can feed.
+**How many creatures a region gets** is not a number anyone picked. It falls out of the food supply: land area multiplied by how fast the vegetation regrows, which comes from rainfall. Torrential Wailing Firth supports hundreds; arid Ranatis, the largest region on the map, supports a few dozen. Species settle where the climate suits them year-round and at least one of their food plants grows, and predators only where their prey already live.
 
 The result is a world that swings rather than sits still. Populations climb until they have eaten the ground bare, crash, and climb again as the vegetation recovers, with winter squeezing the whole cycle harder than summer does.
 
 ### Sharding by region
 
-Ecology runs as four replicas, and they divide the map between themselves with no configuration saying who gets what. Each pod writes a heartbeat row to a shared table, then works out its own share by dividing the number of region shards by the number of pods currently alive, handing the remainder to the lowest-named pods so that every pod's share adds up to exactly the number of regions. It claims free regions until it reaches that share, and gives the surplus back if it is holding more. Sharing out the remainder is what stops a pod starving: if every pod simply rounded its share up, they could all sit at their limit while one held nothing and none of them owed it anything.
+Ecology runs as four replicas that divide the map between themselves with no configuration saying who gets what. Each pod writes a heartbeat row to a shared table, divides the region count by the number of pods alive, and hands the remainder to the lowest-named pods so the shares add up exactly. It then claims free regions until it reaches its share, and gives back any surplus. Sharing out the remainder is what stops a pod starving: if everyone rounded up, they could all sit at their limit while one held nothing.
 
 That is the whole rebalancing mechanism, and it means the split adapts on its own:
 
@@ -489,7 +479,7 @@ The services share one codebase and one image, and differ only in the command th
 
 Services communicate through a RabbitMQ topic exchange called `world.events`. A publisher never knows who is listening.
 
-No service publishes to RabbitMQ directly, because writing to the database and then publishing are two separate writes, and a crash between them would leave a fact in the database that nobody was ever told about. Instead, each service writes its events into an `outbox` table in the same transaction as the data they describe, and a [Debezium Server](https://debezium.io/documentation/reference/stable/operations/debezium-server.html) instance per database reads them straight out of Postgres's write-ahead log and publishes them — the transactional outbox pattern. The routing key and JSON body on the wire are exactly what the service wrote into the table.
+No service publishes to RabbitMQ directly. Writing to the database and then publishing are two separate writes, and a crash between them leaves a fact nobody was told about. Instead each service writes its events into an `outbox` table in the same transaction as the data they describe, and a [Debezium Server](https://debezium.io/documentation/reference/stable/operations/debezium-server.html) per database reads them out of Postgres's write-ahead log and publishes them. That is the transactional outbox pattern, and what lands on the wire is exactly what the service wrote.
 
 > [!NOTE]
 > The `outbox` tables are always empty, and that is not a bug. Each event row is inserted and deleted in the same transaction — Debezium reads the WAL, not the table, so the insert still reaches the broker while the table never grows.
@@ -540,7 +530,7 @@ Genesis, Clock and Ecology have their own Postgres instances and cannot see each
 
 Clock listens. It declares its durable queue before anything else, so worlds created while it was down still arrive as events, and every clock pod shares that queue and one database — whichever pod receives a world's creation event registers it for all of them.
 
-Registration and running are two different things. A registered world just sits in the table until a clock pod claims it: each pod takes out a lease on exactly one world (`SELECT ... FOR UPDATE SKIP LOCKED`, so two pods can never grab the same row), renews it on every tick, and simulates only that world. A pod that finds nothing to claim idles and retries. If a pod dies, its lease expires within 30 seconds and the next pod to start picks the world up. So the number of clock replicas is the dial for how many worlds are actually running — `kubectl scale deployment/clock --replicas=3` means three live worlds, assuming three worlds exist to claim.
+Registration and running are two different things. A registered world sits in the table until a clock pod leases it (`SELECT ... FOR UPDATE SKIP LOCKED`, so two pods can never grab the same row), renews that lease every tick, and simulates only that world. A pod with nothing to claim idles and retries; if a pod dies, its lease expires within 30 seconds and another picks the world up. So clock replicas are the dial for how many worlds actually run: `kubectl scale deployment/clock --replicas=3` means three live worlds.
 
 Ecology leases the same way but at a finer grain: the unit is one region of one world rather than a whole world, and a pod holds several. It also has to know that creatures exist without Genesis ever telling it, which is the point. Genesis publishes species as facts about the world; what actually lives where is Ecology's own conclusion, drawn from those facts and stored in its own database.
 
@@ -588,9 +578,9 @@ make e2e      # needs the stack running
 
 The **unit tests** cover the `domain/` layer, which is all pure functions: that seasons fall on the right days, that temperature stays inside a region's climate band, that snow falls below freezing and rain above it, that the same seed rebuilds the same world, and that no predator is ever given a carnivore to hunt or prey it could never catch.
 
-Ecology is the biggest beneficiary of keeping the rules free of I/O. An hour of life is a function from creatures, vegetation and a temperature to a new set of creatures, so the tests can state things directly: that a creature with nothing to eat starves, that cold builds up until it kills and warmth undoes it, that a predator closes in while its prey runs, that a fed and settled pair breeds while a lone creature does not, that swimmers can leave the coast and walkers cannot, and that the last of a species dying is announced.
+Ecology benefits most from keeping the rules free of I/O. An hour of life is a function from creatures, vegetation and a temperature to a new set of creatures, so the tests state things directly: that a creature with nothing to eat starves, that cold builds until it kills, that a predator closes in while its prey runs, that a fed and settled pair breeds and a lone creature does not, and that the last of a species dying is announced.
 
-The **end-to-end tests** need `make up` first, and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker to confirm every creation event is published, confirm that exactly one world is emitting temperature readings covering all twenty regions, and wait for a census from every region with creatures in it. Two of them bind a queue to a single region's routing key, one for Clock and one for Ecology, and assert nothing from anywhere else arrives.
+The **end-to-end tests** need `make up` first and exercise the whole chain rather than mocking it. They create a real world through the API and check it comes back complete, watch the broker for every creation event, confirm exactly one world is emitting temperature readings across all twenty regions, and wait for a census from every populated region. Two of them bind a queue to a single region's routing key and assert nothing else arrives.
 
 > [!NOTE]
 > The end-to-end tests create real worlds and assume a single clock replica: only one world ever runs, and the extras stay registered but unclaimed and silent. Run them before scaling the clock up, and run `docker compose down -v` if you want to start from an empty slate.
