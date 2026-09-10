@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0](https://github.com/owainjhughes/world-simulator/compare/v0.2.0...v0.3.0) (2026-09-10)
+
+
+### Features
+
+* cretures now exist in the world ([38db18b](https://github.com/owainjhughes/world-simulator/commit/38db18b96b91232615e81553f74f890c978a4109))
+* helm chart ([ab662ca](https://github.com/owainjhughes/world-simulator/commit/ab662cadc541bf58bfde4a4bcfa70944cfb1fb57))
+* transactional outbox via Debezium Server ([6cb8cdc](https://github.com/owainjhughes/world-simulator/commit/6cb8cdc955a346d87ba0e17b931c4c8bc75f01f6))
+* transactional outbox via Debezium Server ([4e38104](https://github.com/owainjhughes/world-simulator/commit/4e38104dc8e7aebf78d58295f72b370348030c39))
+
 ## [0.2.0](https://github.com/owainjhughes/world-simulator/compare/v0.1.0...v0.2.0) (2026-08-10)
 
 
