@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 from domain.atlas import MAP_ROWS, OCEAN
-from domain.events import Climate, DeathCause, SpeciesProfile
+from domain.events import Climate, DeathCause, Sighting, SpeciesProfile
 from domain.seasons import HOURS_PER_DAY
 
 HUNGER_PER_HOUR = 1 / 72
@@ -237,16 +237,21 @@ def populate(
     return spawned
 
 
-def census(
-    creatures: list[Creature], species: dict[UUID, SpeciesProfile]
-) -> dict[str, list[tuple[int, int]]]:
-    seen: dict[str, list[tuple[int, int]]] = {
-        "herbivores": [],
-        "carnivores": [],
-        "omnivores": [],
-    }
+def census(creatures: list[Creature], species: dict[UUID, SpeciesProfile]) -> dict:
+    seen: dict = {"herbivores": [], "carnivores": [], "omnivores": [], "creatures": []}
     for creature in creatures:
-        seen[species[creature.species_id].diet + "s"].append((creature.x, creature.y))
+        profile = species[creature.species_id]
+        seen[profile.diet + "s"].append((creature.x, creature.y))
+        seen["creatures"].append(
+            Sighting(
+                id=creature.id,
+                species=profile.name,
+                diet=profile.diet,
+                transport=profile.transport,
+                x=creature.x,
+                y=creature.y,
+            )
+        )
     return seen
 
 

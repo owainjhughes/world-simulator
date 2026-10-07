@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 Season = Literal["winter", "spring", "summer", "autumn"]
 Condition = Literal["rain", "snow", "sunshine", "wind"]
 Diet = Literal["herbivore", "carnivore", "omnivore"]
+Transport = Literal["walk", "swim", "fly"]
 DeathCause = Literal["starved", "froze", "scorched", "killed", "aged"]
 
 
@@ -28,7 +29,7 @@ class SpeciesProfile(BaseModel):
     habitat: str
     food: list[str] = []
     prey: list[str] = []
-    transport: Literal["walk", "swim", "fly"]
+    transport: Transport
     speed: float
     migratory: bool
 
@@ -164,6 +165,15 @@ class WeatherStopped(Event):
         return f"clock.weather.{self.condition}.stopped.{self.region_slug}"
 
 
+class Sighting(BaseModel):
+    id: UUID
+    species: str
+    diet: Diet
+    transport: Transport
+    x: int
+    y: int
+
+
 class RegionCensus(Event):
     event_type: Literal["RegionCensus"] = "RegionCensus"
     region_id: UUID
@@ -174,6 +184,7 @@ class RegionCensus(Event):
     herbivores: list[tuple[int, int]] = []
     carnivores: list[tuple[int, int]] = []
     omnivores: list[tuple[int, int]] = []
+    creatures: list[Sighting] = []
 
     @property
     def routing_key(self) -> str:

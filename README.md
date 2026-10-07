@@ -89,6 +89,7 @@ Here is the original painted map that the world creation is based off of:
 - Fully event-driven: services never call each other, fully pub/sub
 - Ecology shards itself across pods by region, dividing the map between however many replicas are running
 - A live terminal viewer that draws the world and its creatures, and updates as it runs
+- A graphical viewer: a window where every creature is a small pixel sprite, drawn per species, wandering the map through day, night and weather
 - Runs either on Docker Compose or on a local Kubernetes cluster with Kind
 
 # How to Run Locally
@@ -269,7 +270,7 @@ That opens a small menu listing every world. Worlds a clock pod is actively runn
   1. bb20562b  seed 1542680042  idle
   2. efd5d4eb  seed  961835526  day   2 17:00 winter
 
-  [v]iew N   [c]reate   [d]elete N   [r]efresh   [q]uit
+  [v]iew N   [w]indow N   [c]reate   [d]elete N   [r]efresh   [q]uit
 ```
 
 The menu learns which worlds are running by listening to the event stream for a few seconds — there is no "running worlds" table anywhere, because the lease that says who runs a world lives in the Clock's own database, and services never read each other's databases. The events themselves are the shared truth.
@@ -332,6 +333,24 @@ The log carries weather and life side by side, so kills and extinctions scroll p
 
 > [!NOTE]
 > Weather changes far more often than anything dies, so the ten-line log is mostly rain and wind. Kills are worth waiting for rather than expecting on every frame: a full predator only hunts every few days.
+
+### 🖼 The graphical viewer
+
+Picking `w` instead opens the same world in a window, or run it directly:
+
+```sh
+make gui                  # the newest world
+WORLD_ID=... make gui     # a particular one
+make gui-kind             # against the Kind cluster
+```
+
+It uses [pygame-ce](https://pyga.me/), installed as the optional `gui` extra (`uv run --extra gui ...`, which the Make targets already do), so the service images stay free of it. It needs a desktop to open a window on, so it will not run inside the dev container or Codespaces without a display.
+
+The map is drawn tile by tile in each region's colour, with shallows around the coasts and a faint line along every border. Every creature is a small pixel sprite. Each species gets its own: the body shape comes from how it moves (four-legged walkers, fish, winged fliers), and the colour, markings and ears or fins are rolled from its name, so the same species always looks the same. The eye gives away the diet: dark for herbivores, amber for omnivores, red for carnivores.
+
+Creatures only report where they are once an hour of world time, so the window glides each one from its last tile to its new one over the length of a tick, turning to face the way it is heading. Walkers hop as they go, fliers hover over a shadow, and swimmers bob. A newborn fades in and anything missing from the next census fades out where it last stood. Rain, snow, wind and sunshine are drawn over the regions that have them, and the whole map dims at night.
+
+Scroll to zoom in on the cursor, drag to pan, `F` fits the map back to the window, and `Q` or Escape closes it. Hovering over an animal names its species, diet, way of moving and region; hovering over open ground names the region and its temperature. The legend and the world log sit along the bottom, as in the terminal.
 
 The viewer holds no state of its own and never talks to a database. It is just another subscriber, which is what makes it a good demonstration of the whole design: you can start it, stop it, and start it again, and the simulation neither knows nor cares.
 
@@ -516,7 +535,7 @@ _Editable source: [`docs/sequence.drawio`](docs/sequence.drawio)._
 
 Putting the region at the end of the routing key is what makes `clock.#.wylenn` and `ecology.#.wylenn` work as subscriptions. The cause of death is in the middle of the key rather than the body for the same reason: `ecology.creature.died.starved.#` is a subscription to famine everywhere.
 
-The census carries every living creature's position once an hour, which is what lets the viewer draw a world it keeps no state about. Individual movements are deliberately not published: at a few hundred creatures a region that would be thousands of messages every two seconds, and nothing would be learned from it that the census does not already say.
+The census carries every living creature once an hour, which is what lets the viewers draw a world they keep no state about. Alongside the bare positions grouped by diet, which the terminal viewer reads, its `creatures` list names each one: its id, species, diet, how it moves and its tile. The id is what lets the graphical viewer follow an animal from one census to the next and glide it between them. Individual movements are deliberately not published: at a few hundred creatures a region that would be thousands of messages every two seconds, and nothing would be learned from it that the census does not already say.
 
 ## ⏳ How time works
 
@@ -596,7 +615,7 @@ This is a work in progress and there is plenty I know is missing or wrong.
 - **A world whose creation events go missing never comes alive.** Ecology waits for every region and species before it seeds, which is right, but if a message is genuinely lost the world sits there empty with no way to ask Genesis to say it all again. A replay endpoint, or seeding from an HTTP read of Genesis after a timeout, would close that hole.
 - **Ecology's tuning is hand-picked.** Lifespans, hunger rates, regrowth and how much a predator eats are constants chosen by watching populations rise and fall until they stopped collapsing. They are plausible rather than derived, and a different set would give a different-feeling world.
 - **No observability.** The plan is OpenTelemetry with SigNoz, so a single world creation can be traced across all three services.
-- **The viewer is a terminal program.** A browser-based map, driven by an Observation service that keeps a read model of the world, is the proper version of this.
+- **The viewers are local programs.** The terminal viewer and the pygame window both run on your own machine against the exposed ports. A browser-based map, driven by an Observation service that keeps a read model of the world, is the proper version of this.
 - **Hand-written database manifests.** Real clusters use operators — CloudNativePG for Postgres, the RabbitMQ Cluster Operator for the broker — which handle clustering, failover and backups. Writing the StatefulSets by hand was worth doing once to understand them, but it is not what you would run.
 - **NodePorts instead of an Ingress.** Fine for Kind, not for anything real.
 - **A homemade event envelope.** [CloudEvents](https://cloudevents.io/) is the standard for exactly this and would have been the smarter starting point.

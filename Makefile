@@ -11,11 +11,11 @@ export GENESIS_URL
 export CLOCK_URL
 export AMQP_URL
 
-.PHONY: run up down logs logs-ecology world ensure-world viewer \
+.PHONY: run up down logs logs-ecology world ensure-world viewer gui \
         clean-cluster create-cluster \
         build-docker load-docker deploy-helm clean-helm deploy-local \
         render-helm dev \
-        run-kind logs-kind world-kind worlds-kind viewer-kind e2e-kind \
+        run-kind logs-kind world-kind worlds-kind viewer-kind gui-kind e2e-kind \
         test lint unit e2e
 
 # Docker Compose
@@ -49,7 +49,11 @@ ensure-world:
 
 # Open the live viewer
 viewer:
-	uv run python -m app.viewer.menu
+	uv run --extra gui python -m app.viewer.menu
+
+# Open the graphical viewer in a window on the newest world (WORLD_ID=... picks another)
+gui:
+	uv run --extra gui python -m app.viewer.gui
 
 # Init
 
@@ -96,9 +100,9 @@ dev:
 
 # Kind-scoped helpers
 
-run-kind logs-kind world-kind worlds-kind viewer-kind e2e-kind: GENESIS_URL := http://localhost:18810
-run-kind logs-kind world-kind worlds-kind viewer-kind e2e-kind: CLOCK_URL := http://localhost:18813
-run-kind logs-kind world-kind worlds-kind viewer-kind e2e-kind: AMQP_URL := amqp://dev:dev@localhost:18811/
+run-kind logs-kind world-kind worlds-kind viewer-kind gui-kind e2e-kind: GENESIS_URL := http://localhost:18810
+run-kind logs-kind world-kind worlds-kind viewer-kind gui-kind e2e-kind: CLOCK_URL := http://localhost:18813
+run-kind logs-kind world-kind worlds-kind viewer-kind gui-kind e2e-kind: AMQP_URL := amqp://dev:dev@localhost:18811/
 
 # Deploy to the cluster, create a world if there is none, and open the viewer
 run-kind: deploy-local ensure-world viewer-kind
@@ -117,7 +121,11 @@ worlds-kind:
 
 # Open the live viewer against the cluster
 viewer-kind:
-	uv run python -m app.viewer.menu
+	uv run --extra gui python -m app.viewer.menu
+
+# Open the graphical viewer against the cluster
+gui-kind:
+	uv run --extra gui python -m app.viewer.gui
 
 # Run the end-to-end tests against the cluster
 e2e-kind:

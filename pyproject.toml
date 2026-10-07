@@ -13,6 +13,11 @@ dependencies = [
     "pydantic>=2.11",
 ]
 
+[project.optional-dependencies]
+gui = [
+    "pygame-ce>=2.5",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
