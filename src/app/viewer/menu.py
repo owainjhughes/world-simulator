@@ -40,7 +40,7 @@ def show(worlds: list[dict], running: dict[str, dict]) -> None:
         )
         print(f"  {index}. {world['id'][:8]}  seed {world['seed']:>10}  {status}")
     print()
-    print("  [v]iew N   [c]reate   [d]elete N   [r]efresh   [q]uit")
+    print("  [v]iew N   [w]indow N   [c]reate   [d]elete N   [r]efresh   [q]uit")
 
 
 def pick(worlds: list[dict], argument: str) -> dict | None:
@@ -51,10 +51,10 @@ def pick(worlds: list[dict], argument: str) -> dict | None:
         return None
 
 
-def view(world: dict) -> None:
+def view(world: dict, module: str = "app.viewer.main") -> None:
     try:
         subprocess.run(
-            [sys.executable, "-m", "app.viewer.main"],
+            [sys.executable, "-m", module],
             env={**os.environ, "WORLD_ID": world["id"]},
         )
     except KeyboardInterrupt:
@@ -97,6 +97,8 @@ def main() -> None:
             create()
         elif command == "v" and (world := pick(worlds, argument)):
             view(world)
+        elif command == "w" and (world := pick(worlds, argument)):
+            view(world, "app.viewer.gui")
         elif command == "d" and (world := pick(worlds, argument)):
             remove(world)
 

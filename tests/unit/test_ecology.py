@@ -8,6 +8,7 @@ from domain.ecology import (
     Region,
     allowed_tiles,
     carrying_capacity,
+    census,
     hunting_grounds,
     populate,
     region_suits,
@@ -287,3 +288,17 @@ def test_a_herbivore_leaves_a_bare_tile_for_a_greener_one():
     result = step([standing], [grazer], tiles, [0.0, 0.0, 1.0], climate(), 10.0)
 
     assert result.creatures[0].x > 0
+
+
+def test_a_census_names_every_creature_it_saw():
+    grazer = species("Grazer", transport="swim")
+    hunter = species("Hunter", diet="carnivore", transport="fly")
+    seen = [creature(grazer, 1, 2), creature(hunter, 3, 4)]
+    counted = census(seen, {grazer.id: grazer, hunter.id: hunter})
+    assert counted["herbivores"] == [(1, 2)]
+    assert counted["carnivores"] == [(3, 4)]
+    sightings = {sighting.id: sighting for sighting in counted["creatures"]}
+    assert sightings[seen[0].id].species == "Grazer"
+    assert sightings[seen[0].id].transport == "swim"
+    assert (sightings[seen[1].id].x, sightings[seen[1].id].y) == (3, 4)
+    assert sightings[seen[1].id].diet == "carnivore"
