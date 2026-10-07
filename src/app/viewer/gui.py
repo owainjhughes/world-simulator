@@ -38,8 +38,8 @@ def varied(colour: tuple[int, int, int], amount: float) -> tuple[int, int, int]:
     return tuple(max(0, min(255, round(channel * amount))) for channel in colour)
 
 
+# The camera onto the map: how big a tile is and where the map sits.
 class View:
-    """The camera onto the map: how big a tile is and where the map sits."""
 
     def __init__(self, width: int, height: int) -> None:
         self.tile = MIN_TILE
@@ -84,8 +84,8 @@ class View:
         return max(1, round(self.tile / 11))
 
 
+# Draws the world, caching whatever only changes when the zoom does.
 class Painter:
-    """Draws the world, caching whatever only changes when the zoom does."""
 
     def __init__(self) -> None:
         self.font = pygame.font.Font(None, 18)

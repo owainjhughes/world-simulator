@@ -118,8 +118,8 @@ def _rgb(hue: float, lightness: float, saturation: float) -> tuple[int, int, int
     return round(red * 255), round(green * 255), round(blue * 255)
 
 
+# Every species gets its own sprite, the same one every time it is seen.
 def look_for(species: str, diet: str, transport: str) -> Look:
-    """Every species gets its own sprite, the same one every time it is seen."""
     seed = _digest(species)
     shapes = SHAPES.get(transport, SHAPES["walk"])
     rows = tuple(shapes[seed[0] % len(shapes)])
@@ -141,8 +141,8 @@ def look_for(species: str, diet: str, transport: str) -> Look:
     )
 
 
+# The coloured pixels of one animation frame, as (x, y, colour).
 def pixels(look: Look, frame: int) -> list[tuple[int, int, tuple[int, int, int]]]:
-    """The coloured pixels of one animation frame, as (x, y, colour)."""
     drawn = []
     for y, row in enumerate(look.rows):
         for x, cell in enumerate(row):
@@ -188,8 +188,8 @@ class Sprite:
     died_at: float | None = None
     facing: int = 1
 
+    # Where the sprite is drawn at a moment, in tile units, centre of its tile.
     def place(self, at: float) -> tuple[float, float]:
-        """Where the sprite is drawn at a moment, in tile units, centre of its tile."""
         t = _ease((at - self.moved_at) / self.stride)
         x = self.start[0] + (self.target[0] - self.start[0]) * t
         y = self.start[1] + (self.target[1] - self.start[1]) * t
@@ -197,8 +197,8 @@ class Sprite:
         drift_y = math.cos(at * 0.7 + _phase(self.id, "dy") * math.tau) * DRIFT
         return x + drift_x, y + drift_y
 
+    # Vertical bounce in tile units: fliers hover, walkers hop while moving.
     def bob(self, at: float) -> float:
-        """Vertical bounce in tile units: fliers hover, walkers hop while moving."""
         phase = _phase(self.id, "bob") * math.tau
         if self.transport == "fly":
             return math.sin(at * 4 + phase) * 0.12 - 0.15
@@ -218,16 +218,16 @@ class Sprite:
         return max(0.0, min(fade_in, 1 - (at - self.died_at) / FADE_SECONDS))
 
 
+# A resting spot within the tile, so animals sharing a tile do not stack.
 def _spot(creature_id: str, x: int, y: int) -> tuple[float, float]:
-    """A resting spot within the tile, so animals sharing a tile do not stack."""
     return (
         x + 0.5 + (_phase(creature_id, "sx") - 0.5) * 2 * SPREAD,
         y + 0.5 + (_phase(creature_id, "sy") - 0.5) * 2 * SPREAD,
     )
 
 
+# Tracks every creature seen in a census and glides it between sightings.
 class Herd:
-    """Tracks every creature seen in a census and glides it between sightings."""
 
     def __init__(self) -> None:
         self.sprites: dict[str, Sprite] = {}
@@ -274,8 +274,8 @@ class Herd:
             if sprite.region == region and sprite.id not in seen and sprite.died_at is None:
                 sprite.died_at = at
 
+    # Live and fading sprites, dropping any that have finished fading out.
     def visible(self, at: float) -> list[Sprite]:
-        """Live and fading sprites, dropping any that have finished fading out."""
         gone = [
             creature_id
             for creature_id, sprite in self.sprites.items()
